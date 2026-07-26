@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · {{ site_name }} 管理后台</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/main.css">
+<script>(function(){try{var t=localStorage.getItem('kz-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();</script>
+</head>
+<body class="login-body">
+<main class="login-box">
+  <div class="login-brand">
+    <svg class="brand-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h20a2 2 0 0 1 2 2v5.5a3 3 0 0 0 0 5V24a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5.5a3 3 0 0 0 0-5V8z" fill="currentColor"/><path d="M17.6 9.5 12.8 17h3.1l-1.5 5.5 4.8-7.5h-3.1l1.5-5.5z" fill="var(--bg1)"/></svg>
+    <h1>{{ site_name }} · 管理后台</h1>
+  </div>
+  <form method="post" action="/admin/login" class="login-form panel">
+    <label class="field">
+      <span class="field-name">账号</span>
+      <input name="username" required autofocus autocomplete="username">
+    </label>
+    <label class="field">
+      <span class="field-name">密码</span>
+      <input name="password" type="password" required autocomplete="current-password">
+    </label>
+    <button class="btn btn-primary btn-block" type="submit">登录</button>
+  </form>
+  <p class="login-back"><a href="/">← 返回前台</a></p>
+</main>
+<div class="toast mono" id="toast" role="status" hidden></div>
+<script src="/static/js/main.js" defer></script>
+</body>
+</html>

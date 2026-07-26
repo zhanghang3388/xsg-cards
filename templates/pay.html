@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}收银台 · {{ site.name }}{% endblock %}
+
+{% block body %}
+<section class="pay">
+  <div class="panel pay-card">
+    <div class="pay-head">
+      <h1>收银台</h1>
+      <span class="badge pending" id="stateBadge">待支付</span>
+    </div>
+    <dl class="pay-info">
+      <div><dt>订单号</dt><dd class="mono">{{ order.order_no }}</dd></div>
+      <div><dt>商品</dt><dd>{{ order.product_name }} × {{ order.quantity }}</dd></div>
+      <div><dt>联系方式</dt><dd>{{ order.contact }}</dd></div>
+    </dl>
+    <div class="pay-amount mono"><i>¥</i>{{ order.total_str() }}</div>
+
+    {% if remain_secs == 0 %}
+      <div class="note warn">订单已过期，卡密已释放。请返回商品页重新下单。</div>
+      <a class="btn btn-block" href="/p/{{ order.product_id }}">重新下单</a>
+    {% else %}
+      <div class="countdown mono" id="countdown" data-remain="{{ remain_secs }}" aria-live="polite">--:--</div>
+
+      {% if pay_mode == "mock" %}
+      <button class="btn btn-primary btn-block" id="mockPay" data-no="{{ order.order_no }}">模拟支付（演示模式）</button>
+      <p class="hint">当前为演示模式：点击即视为付款成功并自动发卡。正式运营请在后台「设置 → 支付」切换为易支付。</p>
+      {% else %}
+        {% if epay_ready %}
+        <div class="pay-ways">
+          <form method="post" action="{{ epay_gateway }}/submit.php">
+            {% for f in alipay_fields %}<input type="hidden" name="{{ f.0 }}" value="{{ f.1 }}">{% endfor %}
+            <button class="btn pay-way alipay" type="submit"><span class="pay-dot" aria-hidden="true"></span>支付宝</button>
+          </form>
+          <form method="post" action="{{ epay_gateway }}/submit.php">
+            {% for f in wxpay_fields %}<input type="hidden" name="{{ f.0 }}" value="{{ f.1 }}">{% endfor %}
+            <button class="btn pay-way wxpay" type="submit"><span class="pay-dot" aria-hidden="true"></span>微信支付</button>
+          </form>
+        </div>
+        <p class="hint">跳转到收银台完成支付后，本页会自动进入取卡页。</p>
+        {% else %}
+        <div class="note warn">支付通道尚未配置，请联系站长（后台 → 设置 → 支付参数）。</div>
+        {% endif %}
+      {% endif %}
+    {% endif %}
+  </div>
+  <p class="pay-tip">支付完成后自动跳转取卡；也可稍后在 <a href="/query">订单查询</a> 页凭订单号 + 联系方式取卡。</p>
+</section>
+<script>window.__PAY_ORDER__ = "{{ order.order_no }}";</script>
+{% endblock %}

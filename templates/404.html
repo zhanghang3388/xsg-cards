@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}页面不存在 · {{ site.name }}{% endblock %}
+
+{% block body %}
+<section class="empty nf">
+  <p class="nf-code mono">404</p>
+  <p>这张票据不存在，可能已被撕掉了。</p>
+  <a class="btn btn-primary" href="/">回到首页</a>
+</section>
+{% endblock %}

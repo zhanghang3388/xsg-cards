@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}订单 {{ order.order_no }} · {{ site.name }}{% endblock %}
+
+{% block body %}
+<section class="result">
+{% if !verified %}
+  <div class="panel verify">
+    <h1>取卡验证</h1>
+    <p class="verify-tip">为保护卡密安全，请输入下单时填写的联系方式（{{ masked }}）。</p>
+    <form method="get" class="verify-form">
+      <input name="c" placeholder="下单联系方式" required autofocus>
+      <button class="btn btn-primary" type="submit">查看订单</button>
+    </form>
+  </div>
+{% else %}
+
+  {% if order.status == 1 %}
+  <div class="result-head ok">
+    <div class="seal" aria-hidden="true">✓</div>
+    <div>
+      <h1>发货成功</h1>
+      <p>以下是你的卡密，点击刮层查看。此页可凭订单号 + 联系方式随时找回。</p>
+    </div>
+  </div>
+
+  <div class="codes-head">
+    <h2 class="panel-sub">卡密 <span class="mono">× {{ order.quantity }}</span></h2>
+    <button class="btn btn-s" id="copyAll" type="button">复制全部</button>
+  </div>
+  <div class="codes">
+    {% for code in codes %}
+    <div class="code-item">
+      <span class="code-index mono">#{{ loop.index }}</span>
+      <div class="scratch" tabindex="0" role="button" aria-label="刮开查看第 {{ loop.index }} 张卡密">
+        <span class="code mono">{{ code }}</span>
+        <span class="scratch-cover"><i aria-hidden="true"></i>刮开查看</span>
+      </div>
+      <button class="btn-copy" data-copy="{{ code }}" type="button">复制</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% else if order.status == 3 %}
+  <div class="result-head warn2">
+    <div class="seal" aria-hidden="true">…</div>
+    <div>
+      <h1>已收到付款</h1>
+      <p>当前库存不足，站长将尽快人工补发；稍后刷新本页即可看到卡密。</p>
+    </div>
+  </div>
+  {% else if order.status == 2 %}
+  <div class="result-head expired">
+    <div class="seal" aria-hidden="true">×</div>
+    <div>
+      <h1>订单已过期</h1>
+      <p>该订单超时未支付，已自动取消。如需购买请重新下单。</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="panel order-brief">
+    <h2 class="panel-sub">订单信息</h2>
+    <dl class="pay-info">
+      <div><dt>订单号</dt><dd class="mono">{{ order.order_no }}</dd></div>
+      <div><dt>商品</dt><dd>{{ order.product_name }} × {{ order.quantity }}</dd></div>
+      <div><dt>单价</dt><dd class="mono">¥{{ order.unit_str() }}</dd></div>
+      <div><dt>合计</dt><dd class="mono">¥{{ order.total_str() }}</dd></div>
+      <div><dt>状态</dt><dd><span class="badge {{ order.status_class() }}">{{ order.status_label() }}</span></dd></div>
+      <div><dt>支付方式</dt><dd>{{ order.pay_method_label() }}</dd></div>
+      <div><dt>下单时间</dt><dd class="mono">{{ order.created_at }}</dd></div>
+      <div><dt>支付时间</dt><dd class="mono">{{ order.paid_at_str() }}</dd></div>
+    </dl>
+    <div class="brief-actions">
+      <a class="btn" href="/">继续选购</a>
+      {% if order.status == 2 %}<a class="btn btn-primary" href="/p/{{ order.product_id }}">重新下单</a>{% endif %}
+    </div>
+  </div>
+{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block body %}
+<section class="hero">
+  <div class="hero-main">
+    <p class="eyebrow mono">AUTO DELIVERY · 24H ONLINE</p>
+    <h1 class="hero-title">选卡 · 付款 · <em>秒到</em></h1>
+    <p class="hero-sub">{{ site.subtitle }}</p>
+    <p class="hero-stats mono">在售 <b>{{ on_sale }}</b> 种商品 · 已发出 <b>{{ sold_total }}</b> 张卡密</p>
+  </div>
+  {% if !site.announcement.is_empty() %}
+  <aside class="notice" aria-label="站点公告">
+    <div class="notice-head"><span class="pin" aria-hidden="true"></span>公告</div>
+    <p>{{ site.announcement }}</p>
+  </aside>
+  {% endif %}
+</section>
+
+<nav class="cats" aria-label="商品分类">
+  {% if active_cat == 0 %}<a href="/" class="cat-pill on">全部</a>{% else %}<a href="/" class="cat-pill">全部</a>{% endif %}
+  {% for c in categories %}
+  {% if active_cat == c.id %}<a href="/?cat={{ c.id }}" class="cat-pill on">{{ c.name }}</a>{% else %}<a href="/?cat={{ c.id }}" class="cat-pill">{{ c.name }}</a>{% endif %}
+  {% endfor %}
+</nav>
+
+{% if products.is_empty() %}
+<div class="empty">
+  <p>这个分类还没有上架商品。</p>
+  <a class="btn" href="/">看看全部商品</a>
+</div>
+{% else %}
+<div class="grid">
+  {% for pv in products %}
+  <a class="ticket" href="/p/{{ pv.p.id }}">
+    <span class="notch notch-l" aria-hidden="true"></span>
+    <span class="notch notch-r" aria-hidden="true"></span>
+    <div class="ticket-edge" aria-hidden="true"></div>
+    <div class="ticket-body">
+      <div class="ticket-top">
+        <span class="tag">{{ pv.category_name }}</span>
+        {% if pv.stock == 0 %}<span class="badge out">缺货</span>
+        {% else if pv.stock < 10 %}<span class="badge low">仅剩 {{ pv.stock }}</span>
+        {% else %}<span class="badge in">现货</span>{% endif %}
+      </div>
+      <h3 class="ticket-name">{{ pv.p.name }}</h3>
+      <div class="ticket-meta mono">库存 ×{{ pv.stock }}　已售 {{ pv.sold }}</div>
+      <div class="ticket-foot">
+        <span class="price mono"><i>¥</i>{{ pv.price_str }}</span>
+        {% if pv.stock > 0 %}<span class="buy-cue">立即购买 →</span>{% else %}<span class="buy-cue dim">暂时售罄</span>{% endif %}
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

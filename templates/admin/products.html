@@ -1,0 +1,103 @@
+{% extends "admin/base.html" %}
+
+{% block title %}商品管理{% endblock %}
+
+{% block body %}
+<header class="admin-head">
+  <h1>商品管理</h1>
+  <button class="btn btn-primary" type="button" data-dialog="newProduct">+ 新增商品</button>
+</header>
+
+{% if cats.is_empty() %}
+<div class="note warn">还没有分类，请先到 <a href="/admin/categories">分类管理</a> 添加一个分类。</div>
+{% endif %}
+
+<section class="panel">
+  <table class="tbl">
+    <thead><tr><th class="w-s">ID</th><th>商品</th><th>分类</th><th class="num">价格</th><th class="num">库存</th><th class="num">已售</th><th>状态</th><th class="w-actions">操作</th></tr></thead>
+    <tbody>
+      {% for pv in products %}
+      <tr>
+        <td class="mono">{{ pv.p.id }}</td>
+        <td class="strong">{{ pv.p.name }}</td>
+        <td><span class="tag">{{ pv.category_name }}</span></td>
+        <td class="num mono">¥{{ pv.price_str }}</td>
+        <td class="num mono {% if pv.stock < 10 %}danger-text{% endif %}">{{ pv.stock }}</td>
+        <td class="num mono">{{ pv.sold }}</td>
+        <td>{% if pv.p.status == 1 %}<span class="badge done">在售</span>{% else %}<span class="badge expired">下架</span>{% endif %}</td>
+        <td class="row-actions">
+          <button class="btn btn-s" type="button" data-dialog="pd{{ pv.p.id }}">编辑</button>
+          <a class="btn btn-s" href="/admin/cards?product={{ pv.p.id }}">卡密</a>
+          <form method="post" action="/admin/products/{{ pv.p.id }}/toggle"><button class="btn btn-s" type="submit">{% if pv.p.status == 1 %}下架{% else %}上架{% endif %}</button></form>
+          <form method="post" action="/admin/products/{{ pv.p.id }}/delete" onsubmit="return confirm('删除商品「{{ pv.p.name }}」？未售卡密将一并删除！')"><button class="btn btn-s danger" type="submit">删除</button></form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<!-- 新增商品 -->
+<dialog id="newProduct" class="dlg">
+  <form method="post" action="/admin/products" class="dlg-form">
+    <h2>新增商品</h2>
+    <label class="field"><span class="field-name">商品名称</span>
+      <input name="name" required maxlength="60" placeholder="例如：视频会员 · 月卡">
+    </label>
+    <div class="field-row">
+      <label class="field"><span class="field-name">分类</span>
+        <select name="category_id" required>
+          {% for c in cats %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field"><span class="field-name">价格（元）</span>
+        <input name="price" required placeholder="19.90" inputmode="decimal" class="mono">
+      </label>
+      <label class="field"><span class="field-name">排序</span>
+        <input name="sort" type="number" value="0" class="mono">
+      </label>
+    </div>
+    <label class="field"><span class="field-name">商品说明 <small>（支持换行）</small></span>
+      <textarea name="description" rows="5" placeholder="使用方法、注意事项、售后说明……"></textarea>
+    </label>
+    <div class="dlg-actions">
+      <button class="btn" type="button" data-close>取消</button>
+      <button class="btn btn-primary" type="submit">创建</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 编辑商品 -->
+{% for pv in products %}
+<dialog id="pd{{ pv.p.id }}" class="dlg">
+  <form method="post" action="/admin/products/{{ pv.p.id }}" class="dlg-form">
+    <h2>编辑商品 <span class="mono">#{{ pv.p.id }}</span></h2>
+    <label class="field"><span class="field-name">商品名称</span>
+      <input name="name" value="{{ pv.p.name }}" required maxlength="60">
+    </label>
+    <div class="field-row">
+      <label class="field"><span class="field-name">分类</span>
+        <select name="category_id" required>
+          {% for c in cats %}
+          {% if c.id == pv.p.category_id %}<option value="{{ c.id }}" selected>{{ c.name }}</option>{% else %}<option value="{{ c.id }}">{{ c.name }}</option>{% endif %}
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field"><span class="field-name">价格（元）</span>
+        <input name="price" value="{{ pv.price_str }}" required inputmode="decimal" class="mono">
+      </label>
+      <label class="field"><span class="field-name">排序</span>
+        <input name="sort" type="number" value="{{ pv.p.sort }}" class="mono">
+      </label>
+    </div>
+    <label class="field"><span class="field-name">商品说明</span>
+      <textarea name="description" rows="5">{{ pv.p.description }}</textarea>
+    </label>
+    <div class="dlg-actions">
+      <button class="btn" type="button" data-close>取消</button>
+      <button class="btn btn-primary" type="submit">保存</button>
+    </div>
+  </form>
+</dialog>
+{% endfor %}
+{% endblock %}

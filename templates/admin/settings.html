@@ -1,0 +1,77 @@
+{% extends "admin/base.html" %}
+
+{% block title %}站点设置{% endblock %}
+
+{% block body %}
+<header class="admin-head">
+  <h1>站点设置</h1>
+</header>
+
+<form method="post" action="/admin/settings">
+<div class="two-col">
+  <section class="panel">
+    <h2 class="panel-sub">站点信息</h2>
+    <label class="field"><span class="field-name">站点名称</span>
+      <input name="site_name" value="{{ site_name }}" required maxlength="20">
+    </label>
+    <label class="field"><span class="field-name">拉丁标识 <small>（页头小字，如 CARD·STACK）</small></span>
+      <input name="site_mark" value="{{ site_mark }}" maxlength="30" class="mono">
+    </label>
+    <label class="field"><span class="field-name">副标题</span>
+      <input name="site_subtitle" value="{{ site_subtitle }}" maxlength="60">
+    </label>
+    <label class="field"><span class="field-name">公告 <small>（留空则不显示公告牌）</small></span>
+      <textarea name="announcement" rows="4">{{ announcement }}</textarea>
+    </label>
+    <label class="field"><span class="field-name">默认主题</span>
+      <select name="default_theme">
+        {% if default_theme == "light" %}
+        <option value="dark">墨夜（暗色）</option><option value="light" selected>素笺（亮色）</option>
+        {% else %}
+        <option value="dark" selected>墨夜（暗色）</option><option value="light">素笺（亮色）</option>
+        {% endif %}
+      </select>
+    </label>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel-sub">支付设置</h2>
+    <label class="field"><span class="field-name">站点对外地址 <small>（用于支付回调，末尾不带 /）</small></span>
+      <input name="site_url" value="{{ site_url }}" placeholder="https://shop.example.com" class="mono">
+    </label>
+    <label class="field"><span class="field-name">支付模式</span>
+      <select name="pay_mode">
+        {% if pay_mode == "epay" %}
+        <option value="mock">模拟支付（演示）</option><option value="epay" selected>易支付（正式收款）</option>
+        {% else %}
+        <option value="mock" selected>模拟支付（演示）</option><option value="epay">易支付（正式收款）</option>
+        {% endif %}
+      </select>
+    </label>
+    <label class="field"><span class="field-name">易支付网关 <small>（不带 /submit.php）</small></span>
+      <input name="epay_gateway" value="{{ epay_gateway }}" placeholder="https://pay.example.com" class="mono">
+    </label>
+    <label class="field"><span class="field-name">商户 PID</span>
+      <input name="epay_pid" value="{{ epay_pid }}" class="mono">
+    </label>
+    <label class="field"><span class="field-name">商户密钥 KEY</span>
+      <input name="epay_key" value="{{ epay_key }}" class="mono" type="password" autocomplete="off">
+    </label>
+    <p class="hint">切换为易支付后，收银台将展示支付宝 / 微信按钮并跳转网关收款；回调地址为 <span class="mono">站点地址/api/pay/epay/notify</span>。</p>
+  </section>
+</div>
+<div class="save-bar">
+  <button class="btn btn-primary" type="submit">保存全部设置</button>
+</div>
+</form>
+
+<section class="panel narrow">
+  <h2 class="panel-sub">修改密码</h2>
+  <form method="post" action="/admin/password" class="inline-form">
+    <input name="old_password" type="password" placeholder="原密码" required autocomplete="current-password">
+    <input name="new_password" type="password" placeholder="新密码（至少 6 位）" required minlength="6" autocomplete="new-password">
+    <button class="btn danger" type="submit">修改密码</button>
+  </form>
+  <p class="hint">修改后所有已登录会话将失效，需要重新登录。</p>
+</section>
+{% endblock %}

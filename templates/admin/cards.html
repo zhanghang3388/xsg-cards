@@ -1,0 +1,89 @@
+{% extends "admin/base.html" %}
+
+{% block title %}卡密管理{% endblock %}
+
+{% block body %}
+<header class="admin-head">
+  <h1>卡密管理</h1>
+  <button class="btn btn-primary" type="button" data-dialog="importDlg">⇪ 批量导入</button>
+</header>
+
+<section class="panel">
+  <form method="get" action="/admin/cards" class="inline-form">
+    <select name="product">
+      <option value="0">全部商品</option>
+      {% for pv in products %}
+      {% if pv.p.id == f_product %}<option value="{{ pv.p.id }}" selected>{{ pv.p.name }}</option>{% else %}<option value="{{ pv.p.id }}">{{ pv.p.name }}</option>{% endif %}
+      {% endfor %}
+    </select>
+    <select name="status">
+      {% if f_status == -1 %}<option value="-1" selected>全部状态</option>{% else %}<option value="-1">全部状态</option>{% endif %}
+      {% if f_status == 0 %}<option value="0" selected>在售</option>{% else %}<option value="0">在售</option>{% endif %}
+      {% if f_status == 1 %}<option value="1" selected>已售</option>{% else %}<option value="1">已售</option>{% endif %}
+      {% if f_status == 2 %}<option value="2" selected>锁定</option>{% else %}<option value="2">锁定</option>{% endif %}
+    </select>
+    <input name="q" value="{{ q }}" placeholder="搜索卡密内容" class="mono">
+    <button class="btn" type="submit">筛选</button>
+    {% if f_product > 0 %}
+    <button class="btn danger" type="submit" form="clearUnsold" onclick="return confirm('清空该商品全部未售卡密？此操作不可撤销！')">清空未售</button>
+    {% endif %}
+  </form>
+  {% if f_product > 0 %}
+  <form id="clearUnsold" method="post" action="/admin/cards/delete-unsold" hidden>
+    <input type="hidden" name="product_id" value="{{ f_product }}">
+  </form>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2 class="panel-sub">卡密列表 <small>（最多显示 800 条）</small></h2>
+    <span class="mono small">{{ cards.len() }} 条</span>
+  </div>
+  {% if cards.is_empty() %}
+  <p class="empty-line">没有匹配的卡密。点击右上角「批量导入」添加库存。</p>
+  {% else %}
+  <table class="tbl">
+    <thead><tr><th class="w-s">ID</th><th>卡密</th><th>商品</th><th>状态</th><th>订单</th><th>入库时间</th><th>售出时间</th><th class="w-actions">操作</th></tr></thead>
+    <tbody>
+      {% for k in cards %}
+      <tr>
+        <td class="mono">{{ k.id }}</td>
+        <td class="mono code-cell">{{ k.code }}</td>
+        <td class="small">{{ k.product_name }}</td>
+        <td><span class="badge {{ k.status_class() }}">{{ k.status_label() }}</span></td>
+        <td class="mono small">{{ k.order_id_str() }}</td>
+        <td class="mono small">{{ k.created_at }}</td>
+        <td class="mono small">{{ k.sold_at_str }}</td>
+        <td class="row-actions">
+          {% if k.status == 0 %}
+          <form method="post" action="/admin/cards/{{ k.id }}/delete" onsubmit="return confirm('删除这张卡密？')"><button class="btn btn-s danger" type="submit">删除</button></form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<dialog id="importDlg" class="dlg">
+  <form method="post" action="/admin/cards/import" class="dlg-form">
+    <h2>批量导入卡密</h2>
+    <label class="field"><span class="field-name">目标商品</span>
+      <select name="product_id" required>
+        {% for pv in products %}
+        {% if pv.p.id == f_product %}<option value="{{ pv.p.id }}" selected>{{ pv.p.name }}（现库存 {{ pv.stock }}）</option>{% else %}<option value="{{ pv.p.id }}">{{ pv.p.name }}（现库存 {{ pv.stock }}）</option>{% endif %}
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field"><span class="field-name">卡密内容 <small>（一行一张，自动去重）</small></span>
+      <textarea name="codes" rows="10" required class="mono" placeholder="CARD-AAAA-BBBB-0001&#10;CARD-AAAA-BBBB-0002&#10;账号----密码 这类格式也可以，整行算一张卡"></textarea>
+    </label>
+    <div class="dlg-actions">
+      <button class="btn" type="button" data-close>取消</button>
+      <button class="btn btn-primary" type="submit">导入</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}{{ pv.p.name }} · {{ site.name }}{% endblock %}
+
+{% block body %}
+<nav class="crumbs" aria-label="位置">
+  <a href="/">首页</a><span class="sep">/</span><a href="/?cat={{ pv.p.category_id }}">{{ pv.category_name }}</a><span class="sep">/</span><b>{{ pv.p.name }}</b>
+</nav>
+
+<section class="detail">
+  <article class="panel info">
+    <div class="ticket-top">
+      <span class="tag">{{ pv.category_name }}</span>
+      {% if pv.stock == 0 %}<span class="badge out">缺货</span>
+      {% else if pv.stock < 10 %}<span class="badge low">仅剩 {{ pv.stock }}</span>
+      {% else %}<span class="badge in">现货</span>{% endif %}
+    </div>
+    <h1 class="detail-name">{{ pv.p.name }}</h1>
+    <div class="detail-stats mono">库存 ×{{ pv.stock }}　已售 {{ pv.sold }}　付款后自动发货</div>
+    <div class="divider" aria-hidden="true"></div>
+    <h2 class="panel-sub">商品说明</h2>
+    <div class="desc">{{ pv.p.description }}</div>
+  </article>
+
+  <aside class="panel buybox">
+    <div class="price-line">
+      <span class="price mono big"><i>¥</i>{{ pv.price_str }}</span>
+      <span class="per">/ 张</span>
+    </div>
+    <form method="post" action="/order" class="buy-form">
+      <input type="hidden" name="product_id" value="{{ pv.p.id }}">
+      <label class="field">
+        <span class="field-name">联系方式 <small>（邮箱 / QQ，取卡与查单凭证）</small></span>
+        <input name="contact" required minlength="4" maxlength="64" placeholder="you@example.com" autocomplete="email">
+      </label>
+      <label class="field">
+        <span class="field-name">购买数量</span>
+        <span class="stepper">
+          <button type="button" data-step="-1" aria-label="减少数量">−</button>
+          <input name="quantity" id="qty" type="number" inputmode="numeric" value="1" min="1" max="{{ pv.stock }}">
+          <button type="button" data-step="1" aria-label="增加数量">＋</button>
+        </span>
+      </label>
+      <div class="total-line">
+        <span>合计</span>
+        <span class="price mono" id="totalPrice" data-unit="{{ pv.p.price_cents }}"><i>¥</i>{{ pv.price_str }}</span>
+      </div>
+      {% if pv.stock > 0 %}
+      <button class="btn btn-primary btn-block" type="submit">提交订单</button>
+      {% else %}
+      <button class="btn btn-block" type="button" disabled>已售罄，等待补货</button>
+      {% endif %}
+      <p class="hint">下单后请在 15 分钟内完成支付，超时订单自动取消；付款成功卡密立即显示。</p>
+    </form>
+  </aside>
+</section>
+{% endblock %}

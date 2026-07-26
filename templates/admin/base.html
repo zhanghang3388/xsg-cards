@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}管理后台{% endblock %} · 潇洒哥的卡台</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/main.css">
+<script>(function(){try{var t=localStorage.getItem('kz-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();</script>
+</head>
+<body class="admin">
+<aside class="side">
+  <a class="side-brand" href="/admin">
+    <svg class="brand-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h20a2 2 0 0 1 2 2v5.5a3 3 0 0 0 0 5V24a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5.5a3 3 0 0 0 0-5V8z" fill="currentColor"/><path d="M17.6 9.5 12.8 17h3.1l-1.5 5.5 4.8-7.5h-3.1l1.5-5.5z" fill="var(--bg1)"/></svg>
+    <span>发卡后台</span>
+  </a>
+  <nav class="side-nav">
+    {% if active == "dash" %}<a class="on" href="/admin">仪表盘</a>{% else %}<a href="/admin">仪表盘</a>{% endif %}
+    {% if active == "categories" %}<a class="on" href="/admin/categories">分类</a>{% else %}<a href="/admin/categories">分类</a>{% endif %}
+    {% if active == "products" %}<a class="on" href="/admin/products">商品</a>{% else %}<a href="/admin/products">商品</a>{% endif %}
+    {% if active == "cards" %}<a class="on" href="/admin/cards">卡密</a>{% else %}<a href="/admin/cards">卡密</a>{% endif %}
+    {% if active == "orders" %}<a class="on" href="/admin/orders">订单</a>{% else %}<a href="/admin/orders">订单</a>{% endif %}
+    {% if active == "settings" %}<a class="on" href="/admin/settings">设置</a>{% else %}<a href="/admin/settings">设置</a>{% endif %}
+  </nav>
+  <div class="side-foot">
+    <span class="side-user" title="当前管理员">{{ username }}</span>
+    <div class="side-foot-row">
+      <a href="/" target="_blank" rel="noopener">前台 ↗</a>
+      <button class="theme-btn" id="themeBtn" type="button" aria-label="切换深浅主题">
+        <svg class="ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <svg class="ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <form method="post" action="/admin/logout"><button class="link-btn" type="submit">退出</button></form>
+    </div>
+  </div>
+</aside>
+<main class="admin-main">
+{% block body %}{% endblock %}
+</main>
+<div class="toast mono" id="toast" role="status" hidden></div>
+<script src="/static/js/main.js" defer></script>
+</body>
+</html>

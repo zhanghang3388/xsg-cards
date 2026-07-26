@@ -1,0 +1,59 @@
+{% extends "admin/base.html" %}
+
+{% block title %}订单管理{% endblock %}
+
+{% block body %}
+<header class="admin-head">
+  <h1>订单管理</h1>
+  <p class="admin-sub">「补单」会直接给订单发货：待支付订单视为已收款，待补发订单重试发货。</p>
+</header>
+
+<section class="panel">
+  <form method="get" action="/admin/orders" class="inline-form">
+    <select name="status">
+      {% if f_status == -1 %}<option value="-1" selected>全部状态</option>{% else %}<option value="-1">全部状态</option>{% endif %}
+      {% if f_status == 0 %}<option value="0" selected>待支付</option>{% else %}<option value="0">待支付</option>{% endif %}
+      {% if f_status == 1 %}<option value="1" selected>已完成</option>{% else %}<option value="1">已完成</option>{% endif %}
+      {% if f_status == 2 %}<option value="2" selected>已过期</option>{% else %}<option value="2">已过期</option>{% endif %}
+      {% if f_status == 3 %}<option value="3" selected>已付待补发</option>{% else %}<option value="3">已付待补发</option>{% endif %}
+    </select>
+    <input name="q" value="{{ q }}" placeholder="订单号 / 联系方式 / 商品名">
+    <button class="btn" type="submit">筛选</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2 class="panel-sub">订单列表 <small>（最多显示 300 条）</small></h2>
+    <span class="mono small">{{ orders.len() }} 条</span>
+  </div>
+  {% if orders.is_empty() %}
+  <p class="empty-line">没有匹配的订单。</p>
+  {% else %}
+  <table class="tbl">
+    <thead><tr><th>订单号</th><th>商品</th><th class="num">金额</th><th>联系方式</th><th>状态</th><th>支付</th><th>下单时间</th><th class="w-actions">操作</th></tr></thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td class="mono small">{{ o.order_no }}</td>
+        <td>{{ o.product_name }} × {{ o.quantity }}</td>
+        <td class="num mono">¥{{ o.total_str() }}</td>
+        <td class="small">{{ o.contact }}</td>
+        <td><span class="badge {{ o.status_class() }}">{{ o.status_label() }}</span></td>
+        <td class="small">{{ o.pay_method_label() }}</td>
+        <td class="mono small">{{ o.created_at }}</td>
+        <td class="row-actions">
+          <a class="btn btn-s" href="{{ o.view_link() }}" target="_blank" rel="noopener">查看</a>
+          {% if o.status == 0 %}
+          <form method="post" action="/admin/orders/{{ o.order_no }}/deliver" onsubmit="return confirm('确认已线下收款，直接给该订单发货？')"><button class="btn btn-s" type="submit">补单</button></form>
+          {% else if o.status == 3 %}
+          <form method="post" action="/admin/orders/{{ o.order_no }}/deliver" onsubmit="return confirm('重试给该订单发货？请确认已导入足够库存。')"><button class="btn btn-s warn-btn" type="submit">补发</button></form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

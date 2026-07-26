@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}订单查询 · {{ site.name }}{% endblock %}
+
+{% block body %}
+<section class="query">
+  <div class="panel query-panel">
+    <h1>订单查询</h1>
+    <p class="verify-tip">输入下单时的联系方式即可找回订单与卡密；订单号可不填。</p>
+    <form method="get" action="/query" class="query-form">
+      <input name="contact" value="{{ contact }}" placeholder="联系方式（必填）" required>
+      <input name="order_no" value="{{ order_no }}" placeholder="订单号（选填）" class="mono">
+      <button class="btn btn-primary" type="submit">查询</button>
+    </form>
+  </div>
+
+  {% if searched %}
+    {% if orders.is_empty() %}
+    <div class="empty">
+      <p>没有查到相关订单。请确认联系方式与下单时填写的一致。</p>
+    </div>
+    {% else %}
+    <div class="query-list">
+      {% for o in orders %}
+      <a class="order-row" href="{{ o.view_link() }}">
+        <div class="order-row-main">
+          <span class="mono order-no">{{ o.order_no }}</span>
+          <span class="order-goods">{{ o.product_name }} × {{ o.quantity }}</span>
+        </div>
+        <div class="order-row-side">
+          <span class="price mono"><i>¥</i>{{ o.total_str() }}</span>
+          <span class="badge {{ o.status_class() }}">{{ o.status_label() }}</span>
+          <span class="order-time mono">{{ o.created_at }}</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}
