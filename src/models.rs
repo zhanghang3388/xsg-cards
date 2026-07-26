@@ -108,9 +108,17 @@ pub struct Product {
     pub category_id: i64,
     pub name: String,
     pub description: String,
+    pub image: String,
     pub price_cents: i64,
     pub status: i64,
     pub sort: i64,
+}
+
+impl Product {
+    /// 模板用：是否配了图
+    pub fn has_image(&self) -> bool {
+        !self.image.is_empty()
+    }
 }
 
 fn product_from_row(r: &Row) -> Result<Product> {
@@ -119,9 +127,10 @@ fn product_from_row(r: &Row) -> Result<Product> {
         category_id: r.get(1)?,
         name: r.get(2)?,
         description: r.get(3)?,
-        price_cents: r.get(4)?,
-        status: r.get(5)?,
-        sort: r.get(6)?,
+        image: r.get(4)?,
+        price_cents: r.get(5)?,
+        status: r.get(6)?,
+        sort: r.get(7)?,
     })
 }
 
@@ -135,13 +144,13 @@ pub struct ProductView {
 }
 
 const PRODUCT_COLS: &str =
-    "p.id, p.category_id, p.name, p.description, p.price_cents, p.status, p.sort";
+    "p.id, p.category_id, p.name, p.description, p.image, p.price_cents, p.status, p.sort";
 
 fn product_view_from_row(r: &Row) -> Result<ProductView> {
     let p = product_from_row(r)?;
-    let stock: i64 = r.get(7)?;
-    let sold: i64 = r.get(8)?;
-    let cname: String = r.get(9)?;
+    let stock: i64 = r.get(8)?;
+    let sold: i64 = r.get(9)?;
+    let cname: String = r.get(10)?;
     let price_str = cents_str(p.price_cents);
     Ok(ProductView { p, stock, sold, category_name: cname, price_str })
 }
@@ -194,13 +203,14 @@ pub fn create_product(
     category_id: i64,
     name: &str,
     description: &str,
+    image: &str,
     price_cents: i64,
     sort: i64,
 ) -> Result<()> {
     conn.execute(
-        "INSERT INTO products(category_id, name, description, price_cents, status, sort, created_at)
-         VALUES(?1, ?2, ?3, ?4, 1, ?5, ?6)",
-        (category_id, name, description, price_cents, sort, now_str()),
+        "INSERT INTO products(category_id, name, description, image, price_cents, status, sort, created_at)
+         VALUES(?1, ?2, ?3, ?4, ?5, 1, ?6, ?7)",
+        (category_id, name, description, image, price_cents, sort, now_str()),
     )?;
     Ok(())
 }
@@ -211,14 +221,26 @@ pub fn update_product(
     category_id: i64,
     name: &str,
     description: &str,
+    image: &str,
     price_cents: i64,
     sort: i64,
 ) -> Result<()> {
     conn.execute(
-        "UPDATE products SET category_id=?1, name=?2, description=?3, price_cents=?4, sort=?5 WHERE id=?6",
-        (category_id, name, description, price_cents, sort, id),
+        "UPDATE products SET category_id=?1, name=?2, description=?3, image=?4, price_cents=?5, sort=?6 WHERE id=?7",
+        (category_id, name, description, image, price_cents, sort, id),
     )?;
     Ok(())
+}
+
+/// 取商品当前图片地址（用于替换/删除时清理旧文件）
+pub fn product_image(conn: &Connection, id: i64) -> String {
+    conn.query_row("SELECT image FROM products WHERE id = ?1", [id], |r| {
+        r.get::<_, String>(0)
+    })
+    .optional()
+    .ok()
+    .flatten()
+    .unwrap_or_default()
 }
 
 pub fn toggle_product(conn: &Connection, id: i64) -> Result<()> {

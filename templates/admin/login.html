@@ -14,7 +14,7 @@
     <svg class="brand-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h20a2 2 0 0 1 2 2v5.5a3 3 0 0 0 0 5V24a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5.5a3 3 0 0 0 0-5V8z" fill="currentColor"/><path d="M17.6 9.5 12.8 17h3.1l-1.5 5.5 4.8-7.5h-3.1l1.5-5.5z" fill="var(--bg1)"/></svg>
     <h1>{{ site_name }} · 管理后台</h1>
   </div>
-  <form method="post" action="/admin/login" class="login-form panel">
+  <form method="post" action="{{ base }}/login" class="login-form panel">
     <label class="field">
       <span class="field-name">账号</span>
       <input name="username" required autofocus autocomplete="username">

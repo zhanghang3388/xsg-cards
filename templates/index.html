@@ -36,6 +36,9 @@
     <span class="notch notch-r" aria-hidden="true"></span>
     <div class="ticket-edge" aria-hidden="true"></div>
     <div class="ticket-body">
+      {% if pv.p.has_image() %}
+      <div class="ticket-img"><img src="{{ pv.p.image }}" alt="{{ pv.p.name }}" loading="lazy" decoding="async"></div>
+      {% endif %}
       <div class="ticket-top">
         <span class="tag">{{ pv.category_name }}</span>
         {% if pv.stock == 0 %}<span class="badge out">缺货</span>

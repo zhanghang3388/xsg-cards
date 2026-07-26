@@ -10,7 +10,7 @@
 
 <section class="panel">
   <h2 class="panel-sub">新增分类</h2>
-  <form method="post" action="/admin/categories" class="inline-form">
+  <form method="post" action="{{ base }}/categories" class="inline-form">
     <input name="name" placeholder="分类名称" required maxlength="20">
     <input name="sort" type="number" value="0" class="w-s" title="排序">
     <button class="btn btn-primary" type="submit">添加</button>
@@ -28,8 +28,8 @@
         <td><input form="cf{{ c.id }}" name="sort" value="{{ c.sort }}" type="number" class="w-s"></td>
         <td class="num mono">{{ c.product_count }}</td>
         <td class="row-actions">
-          <form id="cf{{ c.id }}" method="post" action="/admin/categories/{{ c.id }}"><button class="btn btn-s" type="submit">保存</button></form>
-          <form method="post" action="/admin/categories/{{ c.id }}/delete" onsubmit="return confirm('确定删除分类「{{ c.name }}」？')"><button class="btn btn-s danger" type="submit">删除</button></form>
+          <form id="cf{{ c.id }}" method="post" action="{{ base }}/categories/{{ c.id }}"><button class="btn btn-s" type="submit">保存</button></form>
+          <form method="post" action="{{ base }}/categories/{{ c.id }}/delete" onsubmit="return confirm('确定删除分类「{{ c.name }}」？')"><button class="btn btn-s danger" type="submit">删除</button></form>
         </td>
       </tr>
       {% endfor %}

@@ -9,6 +9,9 @@
 
 <section class="detail">
   <article class="panel info">
+    {% if pv.p.has_image() %}
+    <figure class="detail-img"><img src="{{ pv.p.image }}" alt="{{ pv.p.name }}" decoding="async"></figure>
+    {% endif %}
     <div class="ticket-top">
       <span class="tag">{{ pv.category_name }}</span>
       {% if pv.stock == 0 %}<span class="badge out">缺货</span>

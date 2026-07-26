@@ -9,7 +9,7 @@
 </header>
 
 <section class="panel">
-  <form method="get" action="/admin/orders" class="inline-form">
+  <form method="get" action="{{ base }}/orders" class="inline-form">
     <select name="status">
       {% if f_status == -1 %}<option value="-1" selected>全部状态</option>{% else %}<option value="-1">全部状态</option>{% endif %}
       {% if f_status == 0 %}<option value="0" selected>待支付</option>{% else %}<option value="0">待支付</option>{% endif %}
@@ -45,9 +45,9 @@
         <td class="row-actions">
           <a class="btn btn-s" href="{{ o.view_link() }}" target="_blank" rel="noopener">查看</a>
           {% if o.status == 0 %}
-          <form method="post" action="/admin/orders/{{ o.order_no }}/deliver" onsubmit="return confirm('确认已线下收款，直接给该订单发货？')"><button class="btn btn-s" type="submit">补单</button></form>
+          <form method="post" action="{{ base }}/orders/{{ o.order_no }}/deliver" onsubmit="return confirm('确认已线下收款，直接给该订单发货？')"><button class="btn btn-s" type="submit">补单</button></form>
           {% else if o.status == 3 %}
-          <form method="post" action="/admin/orders/{{ o.order_no }}/deliver" onsubmit="return confirm('重试给该订单发货？请确认已导入足够库存。')"><button class="btn btn-s warn-btn" type="submit">补发</button></form>
+          <form method="post" action="{{ base }}/orders/{{ o.order_no }}/deliver" onsubmit="return confirm('重试给该订单发货？请确认已导入足够库存。')"><button class="btn btn-s warn-btn" type="submit">补发</button></form>
           {% endif %}
         </td>
       </tr>

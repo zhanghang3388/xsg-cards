@@ -1,12 +1,65 @@
 use crate::state::SharedState;
 use crate::util::{get_cookie, gen_token, now_str};
 use axum::extract::{Request, State};
+use axum::http::HeaderMap;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Redirect, Response};
 use rusqlite::{Connection, OptionalExtension, Result};
+use std::time::{Duration, Instant};
 
 pub const SESSION_COOKIE: &str = "admin_session";
 const SESSION_DAYS: i64 = 7;
+
+/// 登录失败上限与锁定时长
+const MAX_LOGIN_FAILS: u32 = 5;
+const LOCK_DURATION: Duration = Duration::from_secs(600);
+
+/// 取客户端 IP：优先反向代理透传的头部
+pub fn client_ip(headers: &HeaderMap) -> String {
+    for h in ["x-forwarded-for", "x-real-ip"] {
+        if let Some(v) = headers.get(h).and_then(|v| v.to_str().ok()) {
+            let first = v.split(',').next().unwrap_or("").trim();
+            if !first.is_empty() {
+                return first.to_string();
+            }
+        }
+    }
+    "unknown".to_string()
+}
+
+/// 该 IP 是否已被锁定；返回剩余锁定分钟数
+pub fn login_locked(state: &SharedState, ip: &str) -> Option<u64> {
+    let mut guard = state.login_guard.lock().ok()?;
+    let (fails, last) = *guard.get(ip)?;
+    if fails < MAX_LOGIN_FAILS {
+        return None;
+    }
+    let elapsed = last.elapsed();
+    if elapsed >= LOCK_DURATION {
+        guard.remove(ip);
+        return None;
+    }
+    Some(((LOCK_DURATION - elapsed).as_secs() / 60) + 1)
+}
+
+pub fn record_login_fail(state: &SharedState, ip: &str) {
+    if let Ok(mut guard) = state.login_guard.lock() {
+        // 顺手清理过期条目，避免内存无限增长
+        guard.retain(|_, (_, last)| last.elapsed() < LOCK_DURATION * 2);
+        let e = guard.entry(ip.to_string()).or_insert((0, Instant::now()));
+        if e.1.elapsed() >= LOCK_DURATION {
+            *e = (0, Instant::now());
+        }
+        e.0 += 1;
+        e.1 = Instant::now();
+    }
+}
+
+pub fn clear_login_fails(state: &SharedState, ip: &str) {
+    if let Ok(mut guard) = state.login_guard.lock() {
+        guard.remove(ip);
+    }
+}
 
 #[derive(Clone)]
 pub struct AdminUser {
@@ -106,14 +159,21 @@ pub async fn require_admin(State(state): State<SharedState>, req: Request, next:
             return next.run(req).await;
         }
     }
-    Redirect::to("/admin/login").into_response()
+    Redirect::to(&format!("{}/login", crate::config::admin_base())).into_response()
 }
 
 /// 登录成功 Set-Cookie
 pub fn session_cookie_header(token: &str) -> String {
-    format!("{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800")
+    // Cookie 作用域限定在后台路径，前台请求不会携带会话
+    format!(
+        "{SESSION_COOKIE}={token}; Path={}; HttpOnly; SameSite=Lax; Max-Age=604800",
+        crate::config::admin_base()
+    )
 }
 
 pub fn clear_cookie_header() -> String {
-    format!("{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
+    format!(
+        "{SESSION_COOKIE}=; Path={}; HttpOnly; SameSite=Lax; Max-Age=0",
+        crate::config::admin_base()
+    )
 }

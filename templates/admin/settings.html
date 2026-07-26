@@ -7,7 +7,7 @@
   <h1>站点设置</h1>
 </header>
 
-<form method="post" action="/admin/settings">
+<form method="post" action="{{ base }}/settings">
 <div class="two-col">
   <section class="panel">
     <h2 class="panel-sub">站点信息</h2>
@@ -32,6 +32,10 @@
         {% endif %}
       </select>
     </label>
+    <label class="field"><span class="field-name">后台私密路径 <small>（4-32 位字母数字，可含 - _）</small></span>
+      <input name="admin_path" value="{{ admin_path }}" required maxlength="32" class="mono" autocomplete="off">
+    </label>
+    <p class="hint">当前后台入口：<span class="mono">{{ base }}/</span>。此地址是后台的唯一屏障，请勿分享或写进任何公开页面；修改后需重启服务才生效。</p>
   </section>
 
   <section class="panel">
@@ -67,7 +71,7 @@
 
 <section class="panel narrow">
   <h2 class="panel-sub">修改密码</h2>
-  <form method="post" action="/admin/password" class="inline-form">
+  <form method="post" action="{{ base }}/password" class="inline-form">
     <input name="old_password" type="password" placeholder="原密码" required autocomplete="current-password">
     <input name="new_password" type="password" placeholder="新密码（至少 6 位）" required minlength="6" autocomplete="new-password">
     <button class="btn danger" type="submit">修改密码</button>

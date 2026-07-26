@@ -5,7 +5,7 @@ edition = "2021"
 description = "潇洒哥的卡台 · 单商户自动发卡网"
 
 [dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
 tower-http = { version = "0.6", features = ["fs"] }
 askama = "0.12"

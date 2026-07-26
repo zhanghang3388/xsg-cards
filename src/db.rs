@@ -6,8 +6,24 @@ pub fn init(path: &str) -> Result<Connection> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     migrate(&conn)?;
+    migrate_columns(&conn)?;
     seed(&conn)?;
     Ok(conn)
+}
+
+/// 增量列迁移：老库升级用，已存在则跳过
+fn migrate_columns(conn: &Connection) -> Result<()> {
+    let has_image: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(products)")?;
+        let cols = stmt.query_map([], |r| r.get::<_, String>(1))?;
+        let found = cols.filter_map(|c| c.ok()).any(|c| c == "image");
+        found
+    };
+    if !has_image {
+        conn.execute_batch("ALTER TABLE products ADD COLUMN image TEXT NOT NULL DEFAULT ''")?;
+        tracing::info!("数据库迁移：products 表已新增 image 列");
+    }
+    Ok(())
 }
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -38,6 +54,7 @@ fn migrate(conn: &Connection) -> Result<()> {
             category_id INTEGER NOT NULL,
             name        TEXT NOT NULL,
             description TEXT NOT NULL DEFAULT '',
+            image       TEXT NOT NULL DEFAULT '',
             price_cents INTEGER NOT NULL DEFAULT 0,
             status      INTEGER NOT NULL DEFAULT 1,
             sort        INTEGER NOT NULL DEFAULT 0,

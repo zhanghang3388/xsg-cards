@@ -9,7 +9,7 @@
 </header>
 
 {% if cats.is_empty() %}
-<div class="note warn">还没有分类，请先到 <a href="/admin/categories">分类管理</a> 添加一个分类。</div>
+<div class="note warn">还没有分类，请先到 <a href="{{ base }}/categories">分类管理</a> 添加一个分类。</div>
 {% endif %}
 
 <section class="panel">
@@ -19,7 +19,12 @@
       {% for pv in products %}
       <tr>
         <td class="mono">{{ pv.p.id }}</td>
-        <td class="strong">{{ pv.p.name }}</td>
+        <td>
+          <div class="cell-prod">
+            {% if pv.p.has_image() %}<img class="thumb" src="{{ pv.p.image }}" alt="" loading="lazy">{% else %}<span class="thumb thumb-ph" aria-hidden="true">无图</span>{% endif %}
+            <span class="strong">{{ pv.p.name }}</span>
+          </div>
+        </td>
         <td><span class="tag">{{ pv.category_name }}</span></td>
         <td class="num mono">¥{{ pv.price_str }}</td>
         <td class="num mono {% if pv.stock < 10 %}danger-text{% endif %}">{{ pv.stock }}</td>
@@ -27,9 +32,9 @@
         <td>{% if pv.p.status == 1 %}<span class="badge done">在售</span>{% else %}<span class="badge expired">下架</span>{% endif %}</td>
         <td class="row-actions">
           <button class="btn btn-s" type="button" data-dialog="pd{{ pv.p.id }}">编辑</button>
-          <a class="btn btn-s" href="/admin/cards?product={{ pv.p.id }}">卡密</a>
-          <form method="post" action="/admin/products/{{ pv.p.id }}/toggle"><button class="btn btn-s" type="submit">{% if pv.p.status == 1 %}下架{% else %}上架{% endif %}</button></form>
-          <form method="post" action="/admin/products/{{ pv.p.id }}/delete" onsubmit="return confirm('删除商品「{{ pv.p.name }}」？未售卡密将一并删除！')"><button class="btn btn-s danger" type="submit">删除</button></form>
+          <a class="btn btn-s" href="{{ base }}/cards?product={{ pv.p.id }}">卡密</a>
+          <form method="post" action="{{ base }}/products/{{ pv.p.id }}/toggle"><button class="btn btn-s" type="submit">{% if pv.p.status == 1 %}下架{% else %}上架{% endif %}</button></form>
+          <form method="post" action="{{ base }}/products/{{ pv.p.id }}/delete" onsubmit="return confirm('删除商品「{{ pv.p.name }}」？未售卡密将一并删除！')"><button class="btn btn-s danger" type="submit">删除</button></form>
         </td>
       </tr>
       {% endfor %}
@@ -39,7 +44,7 @@
 
 <!-- 新增商品 -->
 <dialog id="newProduct" class="dlg">
-  <form method="post" action="/admin/products" class="dlg-form">
+  <form method="post" action="{{ base }}/products" class="dlg-form" enctype="multipart/form-data">
     <h2>新增商品</h2>
     <label class="field"><span class="field-name">商品名称</span>
       <input name="name" required maxlength="60" placeholder="例如：视频会员 · 月卡">
@@ -57,6 +62,18 @@
         <input name="sort" type="number" value="0" class="mono">
       </label>
     </div>
+
+    <div class="img-field">
+      <span class="field-name">商品图片 <small>（PNG / JPG / WEBP / GIF，不超过 2MB，可留空）</small></span>
+      <div class="img-row">
+        <div class="img-prev" data-prev><span class="img-ph">暂无图片</span></div>
+        <div class="img-ctrl">
+          <input type="file" name="image_file" accept="image/png,image/jpeg,image/webp,image/gif" data-imgfile>
+          <input name="image_url" placeholder="或填外链：https://…" class="mono" maxlength="300">
+        </div>
+      </div>
+    </div>
+
     <label class="field"><span class="field-name">商品说明 <small>（支持换行）</small></span>
       <textarea name="description" rows="5" placeholder="使用方法、注意事项、售后说明……"></textarea>
     </label>
@@ -70,8 +87,9 @@
 <!-- 编辑商品 -->
 {% for pv in products %}
 <dialog id="pd{{ pv.p.id }}" class="dlg">
-  <form method="post" action="/admin/products/{{ pv.p.id }}" class="dlg-form">
+  <form method="post" action="{{ base }}/products/{{ pv.p.id }}" class="dlg-form" enctype="multipart/form-data">
     <h2>编辑商品 <span class="mono">#{{ pv.p.id }}</span></h2>
+    <input type="hidden" name="image_current" value="{{ pv.p.image }}">
     <label class="field"><span class="field-name">商品名称</span>
       <input name="name" value="{{ pv.p.name }}" required maxlength="60">
     </label>
@@ -90,6 +108,23 @@
         <input name="sort" type="number" value="{{ pv.p.sort }}" class="mono">
       </label>
     </div>
+
+    <div class="img-field">
+      <span class="field-name">商品图片 <small>（上传新图即替换原图）</small></span>
+      <div class="img-row">
+        <div class="img-prev" data-prev>
+          {% if pv.p.has_image() %}<img src="{{ pv.p.image }}" alt="当前图片">{% else %}<span class="img-ph">暂无图片</span>{% endif %}
+        </div>
+        <div class="img-ctrl">
+          <input type="file" name="image_file" accept="image/png,image/jpeg,image/webp,image/gif" data-imgfile>
+          <input name="image_url" placeholder="或填外链：https://…" class="mono" maxlength="300">
+          {% if pv.p.has_image() %}
+          <label class="check"><input type="checkbox" name="remove_image" value="1"> 移除当前图片</label>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
     <label class="field"><span class="field-name">商品说明</span>
       <textarea name="description" rows="5">{{ pv.p.description }}</textarea>
     </label>

@@ -177,6 +177,27 @@
     });
   }
 
+  /* ---------- 后台：商品图片选择预览 ---------- */
+  document.querySelectorAll("[data-imgfile]").forEach(function (inp) {
+    inp.addEventListener("change", function () {
+      var row = inp.closest(".img-row");
+      var box = row && row.querySelector("[data-prev]");
+      var file = inp.files && inp.files[0];
+      if (!box || !file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        toast("图片超过 2MB，请压缩后再上传", true);
+        inp.value = "";
+        return;
+      }
+      var img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+      img.alt = "预览";
+      img.onload = function () { URL.revokeObjectURL(img.src); };
+      box.innerHTML = "";
+      box.appendChild(img);
+    });
+  });
+
   /* ---------- 对话框 ---------- */
   document.querySelectorAll("[data-dialog]").forEach(function (btn) {
     btn.addEventListener("click", function () {

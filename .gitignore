@@ -4,3 +4,5 @@ data.db-wal
 data.db-shm
 *.log
 node_modules
+codex_vps_ed25519*
+/uploads

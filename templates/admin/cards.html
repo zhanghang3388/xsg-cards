@@ -9,7 +9,7 @@
 </header>
 
 <section class="panel">
-  <form method="get" action="/admin/cards" class="inline-form">
+  <form method="get" action="{{ base }}/cards" class="inline-form">
     <select name="product">
       <option value="0">全部商品</option>
       {% for pv in products %}
@@ -29,7 +29,7 @@
     {% endif %}
   </form>
   {% if f_product > 0 %}
-  <form id="clearUnsold" method="post" action="/admin/cards/delete-unsold" hidden>
+  <form id="clearUnsold" method="post" action="{{ base }}/cards/delete-unsold" hidden>
     <input type="hidden" name="product_id" value="{{ f_product }}">
   </form>
   {% endif %}
@@ -57,7 +57,7 @@
         <td class="mono small">{{ k.sold_at_str }}</td>
         <td class="row-actions">
           {% if k.status == 0 %}
-          <form method="post" action="/admin/cards/{{ k.id }}/delete" onsubmit="return confirm('删除这张卡密？')"><button class="btn btn-s danger" type="submit">删除</button></form>
+          <form method="post" action="{{ base }}/cards/{{ k.id }}/delete" onsubmit="return confirm('删除这张卡密？')"><button class="btn btn-s danger" type="submit">删除</button></form>
           {% endif %}
         </td>
       </tr>
@@ -68,7 +68,7 @@
 </section>
 
 <dialog id="importDlg" class="dlg">
-  <form method="post" action="/admin/cards/import" class="dlg-form">
+  <form method="post" action="{{ base }}/cards/import" class="dlg-form">
     <h2>批量导入卡密</h2>
     <label class="field"><span class="field-name">目标商品</span>
       <select name="product_id" required>

@@ -1,15 +1,22 @@
 use crate::auth::{self, AdminUser};
-use crate::models::{self, Category, CardView, Order, ProductView};
+use crate::config::{admin_base, sanitize_slug};
+use crate::models::{self, CardView, Category, Order, ProductView};
 use crate::state::SharedState;
+use crate::upload;
 use crate::util::{enc, html, yuan_to_cents};
 use askama::Template;
-use axum::extract::{Path, Query, State};
-use axum::http::{header, HeaderValue};
+use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
+use axum::http::{header, HeaderMap, HeaderValue};
 use axum::middleware;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
 use serde::Deserialize;
+
+/// 后台内部跳转：自动带上隐藏路径前缀
+fn ard(path: &str) -> Response {
+    Redirect::to(&format!("{}{}", admin_base(), path)).into_response()
+}
 
 pub fn router(state: SharedState) -> Router<SharedState> {
     let protected = Router::new()
@@ -29,10 +36,9 @@ pub fn router(state: SharedState) -> Router<SharedState> {
         .route("/orders/{no}/deliver", post(order_deliver))
         .route("/settings", get(settings_page).post(settings_save))
         .route("/password", post(password_change))
-        .route_layer(middleware::from_fn_with_state(
-            state,
-            auth::require_admin,
-        ));
+        .route_layer(middleware::from_fn_with_state(state, auth::require_admin))
+        // 商品图片上传需要更大的请求体上限
+        .layer(DefaultBodyLimit::max(6 * 1024 * 1024));
 
     Router::new()
         .route("/login", get(login_page).post(login_post))
@@ -46,13 +52,17 @@ pub fn router(state: SharedState) -> Router<SharedState> {
 #[template(path = "admin/login.html")]
 struct LoginTpl {
     site_name: String,
+    base: &'static str,
 }
 
 async fn login_page(State(state): State<SharedState>) -> Response {
     let db = state.db.lock().await;
     let site_name = models::get_setting(&db, "site_name");
     drop(db);
-    html(LoginTpl { site_name })
+    html(LoginTpl {
+        site_name,
+        base: admin_base(),
+    })
 }
 
 #[derive(Deserialize)]
@@ -61,26 +71,39 @@ pub struct LoginForm {
     password: String,
 }
 
-async fn login_post(State(state): State<SharedState>, Form(f): Form<LoginForm>) -> Response {
+async fn login_post(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Form(f): Form<LoginForm>,
+) -> Response {
+    let ip = auth::client_ip(&headers);
+    if let Some(mins) = auth::login_locked(&state, &ip) {
+        return ard(&format!(
+            "/login?err={}",
+            enc(&format!("失败次数过多，请 {mins} 分钟后再试"))
+        ));
+    }
     let db = state.db.lock().await;
     let admin = auth::verify_login(&db, f.username.trim(), &f.password);
     match admin {
         Some(a) => {
             let token = match auth::create_session(&db, a.id) {
                 Ok(t) => t,
-                Err(e) => {
-                    return Redirect::to(&format!("/admin/login?err={}", enc(&e.to_string())))
-                        .into_response()
-                }
+                Err(e) => return ard(&format!("/login?err={}", enc(&e.to_string()))),
             };
             drop(db);
-            let mut resp = Redirect::to("/admin").into_response();
+            auth::clear_login_fails(&state, &ip);
+            let mut resp = ard("/");
             if let Ok(v) = HeaderValue::from_str(&auth::session_cookie_header(&token)) {
                 resp.headers_mut().append(header::SET_COOKIE, v);
             }
             resp
         }
-        None => Redirect::to("/admin/login?err=账号或密码不正确").into_response(),
+        None => {
+            drop(db);
+            auth::record_login_fail(&state, &ip);
+            ard("/login?err=账号或密码不正确")
+        }
     }
 }
 
@@ -89,7 +112,7 @@ async fn logout(State(state): State<SharedState>, req: axum::extract::Request) -
         let db = state.db.lock().await;
         auth::destroy_session(&db, &token);
     }
-    let mut resp = Redirect::to("/admin/login").into_response();
+    let mut resp = ard("/login");
     if let Ok(v) = HeaderValue::from_str(&auth::clear_cookie_header()) {
         resp.headers_mut().append(header::SET_COOKIE, v);
     }
@@ -103,6 +126,7 @@ async fn logout(State(state): State<SharedState>, req: axum::extract::Request) -
 struct DashTpl {
     username: String,
     active: &'static str,
+    base: &'static str,
     stats: models::DashStats,
     low_stock: Vec<ProductView>,
     recent: Vec<Order>,
@@ -125,6 +149,7 @@ async fn dashboard(
     html(DashTpl {
         username: admin.username,
         active: "dash",
+        base: admin_base(),
         stats,
         low_stock,
         recent,
@@ -146,6 +171,7 @@ fn err_page(e: &str) -> Response {
 struct CategoriesTpl {
     username: String,
     active: &'static str,
+    base: &'static str,
     cats: Vec<Category>,
 }
 
@@ -159,6 +185,7 @@ async fn categories_page(
     html(CategoriesTpl {
         username: admin.username,
         active: "categories",
+        base: admin_base(),
         cats,
     })
 }
@@ -172,12 +199,12 @@ pub struct CategoryForm {
 async fn category_create(State(state): State<SharedState>, Form(f): Form<CategoryForm>) -> Response {
     let name = f.name.trim();
     if name.is_empty() {
-        return Redirect::to("/admin/categories?err=分类名不能为空").into_response();
+        return ard("/categories?err=分类名不能为空");
     }
     let db = state.db.lock().await;
     match models::create_category(&db, name, f.sort.unwrap_or(0)) {
-        Ok(_) => Redirect::to("/admin/categories?msg=已添加").into_response(),
-        Err(e) => Redirect::to(&format!("/admin/categories?err={}", enc(&e.to_string()))).into_response(),
+        Ok(_) => ard("/categories?msg=已添加"),
+        Err(e) => ard(&format!("/categories?err={}", enc(&e.to_string()))),
     }
 }
 
@@ -188,16 +215,16 @@ async fn category_update(
 ) -> Response {
     let db = state.db.lock().await;
     match models::update_category(&db, id, f.name.trim(), f.sort.unwrap_or(0)) {
-        Ok(_) => Redirect::to("/admin/categories?msg=已保存").into_response(),
-        Err(e) => Redirect::to(&format!("/admin/categories?err={}", enc(&e.to_string()))).into_response(),
+        Ok(_) => ard("/categories?msg=已保存"),
+        Err(e) => ard(&format!("/categories?err={}", enc(&e.to_string()))),
     }
 }
 
 async fn category_delete(State(state): State<SharedState>, Path(id): Path<i64>) -> Response {
     let db = state.db.lock().await;
     match models::delete_category(&db, id) {
-        Ok(_) => Redirect::to("/admin/categories?msg=已删除").into_response(),
-        Err(e) => Redirect::to(&format!("/admin/categories?err={}", enc(&e))).into_response(),
+        Ok(_) => ard("/categories?msg=已删除"),
+        Err(e) => ard(&format!("/categories?err={}", enc(&e))),
     }
 }
 
@@ -208,6 +235,7 @@ async fn category_delete(State(state): State<SharedState>, Path(id): Path<i64>) 
 struct ProductsTpl {
     username: String,
     active: &'static str,
+    base: &'static str,
     products: Vec<ProductView>,
     cats: Vec<Category>,
 }
@@ -223,71 +251,169 @@ async fn products_page(
     html(ProductsTpl {
         username: admin.username,
         active: "products",
+        base: admin_base(),
         products,
         cats,
     })
 }
 
-#[derive(Deserialize)]
-pub struct ProductForm {
+struct ProductInput {
     category_id: i64,
     name: String,
     description: String,
-    price: String,
-    sort: Option<i64>,
+    image: String,
+    price_cents: i64,
+    sort: i64,
 }
 
-fn parse_product_form(f: &ProductForm) -> Result<(String, i64), String> {
-    let name = f.name.trim().to_string();
+/// 解析商品表单（multipart：文本字段 + 可选图片文件）
+/// 先做完文本校验再落盘图片，避免校验失败留下孤儿文件。
+async fn read_product_form(mut mp: Multipart) -> Result<ProductInput, String> {
+    let (mut category_id, mut sort) = (0i64, 0i64);
+    let (mut name, mut description, mut price) = (String::new(), String::new(), String::new());
+    let (mut image_url, mut image_current) = (String::new(), String::new());
+    let mut remove_image = false;
+    let mut file: Vec<u8> = Vec::new();
+
+    while let Some(field) = mp
+        .next_field()
+        .await
+        .map_err(|e| format!("表单读取失败：{e}"))?
+    {
+        let fname = field.name().unwrap_or_default().to_string();
+        if fname == "image_file" {
+            let data = field
+                .bytes()
+                .await
+                .map_err(|_| "图片上传失败，请确认文件小于 2MB".to_string())?;
+            if !data.is_empty() {
+                file = data.to_vec();
+            }
+            continue;
+        }
+        let v = field
+            .text()
+            .await
+            .map_err(|e| format!("表单读取失败：{e}"))?;
+        match fname.as_str() {
+            "category_id" => category_id = v.trim().parse().unwrap_or(0),
+            "name" => name = v.trim().to_string(),
+            "description" => description = v.trim().to_string(),
+            "price" => price = v.trim().to_string(),
+            "sort" => sort = v.trim().parse().unwrap_or(0),
+            "image_url" => image_url = v.trim().to_string(),
+            "image_current" => image_current = v.trim().to_string(),
+            "remove_image" => remove_image = !v.is_empty(),
+            _ => {}
+        }
+    }
+
     if name.is_empty() {
         return Err("商品名不能为空".into());
     }
-    let cents = yuan_to_cents(&f.price).ok_or("价格格式不正确，示例：19.90")?;
-    if cents <= 0 {
+    if category_id <= 0 {
+        return Err("请选择商品分类".into());
+    }
+    let price_cents = yuan_to_cents(&price).ok_or("价格格式不正确，示例：19.90")?;
+    if price_cents <= 0 {
         return Err("价格必须大于 0".into());
     }
-    Ok((name, cents))
+
+    // 图片取值优先级：移除 > 新上传 > 外链 > 保持原图
+    let image = if remove_image {
+        String::new()
+    } else if !file.is_empty() {
+        upload::save_image(&file)?
+    } else if !image_url.is_empty() {
+        if !upload::valid_image_ref(&image_url) {
+            return Err("图片地址不合法，请填写 http(s):// 开头的完整链接".into());
+        }
+        image_url
+    } else if upload::valid_image_ref(&image_current) {
+        image_current
+    } else {
+        String::new()
+    };
+
+    Ok(ProductInput {
+        category_id,
+        name,
+        description,
+        image,
+        price_cents,
+        sort,
+    })
 }
 
-async fn product_create(State(state): State<SharedState>, Form(f): Form<ProductForm>) -> Response {
-    let (name, cents) = match parse_product_form(&f) {
+async fn product_create(State(state): State<SharedState>, mp: Multipart) -> Response {
+    let f = match read_product_form(mp).await {
         Ok(v) => v,
-        Err(e) => return Redirect::to(&format!("/admin/products?err={}", enc(&e))).into_response(),
+        Err(e) => return ard(&format!("/products?err={}", enc(&e))),
     };
     let db = state.db.lock().await;
-    match models::create_product(&db, f.category_id, &name, f.description.trim(), cents, f.sort.unwrap_or(0)) {
-        Ok(_) => Redirect::to("/admin/products?msg=商品已创建，记得导入卡密").into_response(),
-        Err(e) => Redirect::to(&format!("/admin/products?err={}", enc(&e.to_string()))).into_response(),
+    match models::create_product(
+        &db,
+        f.category_id,
+        &f.name,
+        &f.description,
+        &f.image,
+        f.price_cents,
+        f.sort,
+    ) {
+        Ok(_) => ard("/products?msg=商品已创建，记得导入卡密"),
+        Err(e) => {
+            upload::remove_local(&f.image);
+            ard(&format!("/products?err={}", enc(&e.to_string())))
+        }
     }
 }
 
 async fn product_update(
     State(state): State<SharedState>,
     Path(id): Path<i64>,
-    Form(f): Form<ProductForm>,
+    mp: Multipart,
 ) -> Response {
-    let (name, cents) = match parse_product_form(&f) {
+    let f = match read_product_form(mp).await {
         Ok(v) => v,
-        Err(e) => return Redirect::to(&format!("/admin/products?err={}", enc(&e))).into_response(),
+        Err(e) => return ard(&format!("/products?err={}", enc(&e))),
     };
     let db = state.db.lock().await;
-    match models::update_product(&db, id, f.category_id, &name, f.description.trim(), cents, f.sort.unwrap_or(0)) {
-        Ok(_) => Redirect::to("/admin/products?msg=已保存").into_response(),
-        Err(e) => Redirect::to(&format!("/admin/products?err={}", enc(&e.to_string()))).into_response(),
+    let old_image = models::product_image(&db, id);
+    match models::update_product(
+        &db,
+        id,
+        f.category_id,
+        &f.name,
+        &f.description,
+        &f.image,
+        f.price_cents,
+        f.sort,
+    ) {
+        Ok(_) => {
+            if old_image != f.image {
+                upload::remove_local(&old_image);
+            }
+            ard("/products?msg=已保存")
+        }
+        Err(e) => ard(&format!("/products?err={}", enc(&e.to_string()))),
     }
 }
 
 async fn product_toggle(State(state): State<SharedState>, Path(id): Path<i64>) -> Response {
     let db = state.db.lock().await;
     let _ = models::toggle_product(&db, id);
-    Redirect::to("/admin/products?msg=状态已切换").into_response()
+    ard("/products?msg=状态已切换")
 }
 
 async fn product_delete(State(state): State<SharedState>, Path(id): Path<i64>) -> Response {
     let db = state.db.lock().await;
+    let image = models::product_image(&db, id);
     match models::delete_product(&db, id) {
-        Ok(_) => Redirect::to("/admin/products?msg=已删除（未售卡密一并清除）").into_response(),
-        Err(e) => Redirect::to(&format!("/admin/products?err={}", enc(&e.to_string()))).into_response(),
+        Ok(_) => {
+            upload::remove_local(&image);
+            ard("/products?msg=已删除（未售卡密一并清除）")
+        }
+        Err(e) => ard(&format!("/products?err={}", enc(&e.to_string()))),
     }
 }
 
@@ -298,6 +424,7 @@ async fn product_delete(State(state): State<SharedState>, Path(id): Path<i64>) -
 struct CardsTpl {
     username: String,
     active: &'static str,
+    base: &'static str,
     cards: Vec<CardView>,
     products: Vec<ProductView>,
     f_product: i64,
@@ -333,6 +460,7 @@ async fn cards_page(
     html(CardsTpl {
         username: admin.username,
         active: "cards",
+        base: admin_base(),
         cards,
         products,
         f_product,
@@ -356,16 +484,16 @@ async fn cards_import(State(state): State<SharedState>, Form(f): Form<ImportForm
             } else {
                 format!("导入 {ok} 张")
             };
-            Redirect::to(&format!("/admin/cards?product={}&msg={}", f.product_id, enc(&msg))).into_response()
+            ard(&format!("/cards?product={}&msg={}", f.product_id, enc(&msg)))
         }
-        Err(e) => Redirect::to(&format!("/admin/cards?err={}", enc(&e.to_string()))).into_response(),
+        Err(e) => ard(&format!("/cards?err={}", enc(&e.to_string()))),
     }
 }
 
 async fn card_delete(State(state): State<SharedState>, Path(id): Path<i64>) -> Response {
     let db = state.db.lock().await;
     let _ = models::delete_card(&db, id);
-    Redirect::to("/admin/cards?msg=已删除（仅可删除未售卡密）").into_response()
+    ard("/cards?msg=已删除（仅可删除未售卡密）")
 }
 
 #[derive(Deserialize)]
@@ -379,8 +507,12 @@ async fn cards_delete_unsold(
 ) -> Response {
     let db = state.db.lock().await;
     match models::delete_unsold_cards(&db, f.product_id) {
-        Ok(n) => Redirect::to(&format!("/admin/cards?product={}&msg={}", f.product_id, enc(&format!("已清空 {n} 张未售卡密")))).into_response(),
-        Err(e) => Redirect::to(&format!("/admin/cards?err={}", enc(&e.to_string()))).into_response(),
+        Ok(n) => ard(&format!(
+            "/cards?product={}&msg={}",
+            f.product_id,
+            enc(&format!("已清空 {n} 张未售卡密"))
+        )),
+        Err(e) => ard(&format!("/cards?err={}", enc(&e.to_string()))),
     }
 }
 
@@ -391,6 +523,7 @@ async fn cards_delete_unsold(
 struct OrdersTpl {
     username: String,
     active: &'static str,
+    base: &'static str,
     orders: Vec<Order>,
     f_status: i64,
     q: String,
@@ -421,6 +554,7 @@ async fn orders_page(
     html(OrdersTpl {
         username: admin.username,
         active: "orders",
+        base: admin_base(),
         orders,
         f_status,
         q,
@@ -431,10 +565,10 @@ async fn orders_page(
 async fn order_deliver(State(state): State<SharedState>, Path(no): Path<String>) -> Response {
     let mut db = state.db.lock().await;
     match models::deliver_order(&mut db, &no, "manual") {
-        Ok(1) => Redirect::to("/admin/orders?msg=已发货").into_response(),
-        Ok(3) => Redirect::to("/admin/orders?err=库存不足，已标记待补发，请先导入卡密再重试").into_response(),
-        Ok(_) => Redirect::to("/admin/orders?msg=处理完成").into_response(),
-        Err(e) => Redirect::to(&format!("/admin/orders?err={}", enc(&e))).into_response(),
+        Ok(1) => ard("/orders?msg=已发货"),
+        Ok(3) => ard("/orders?err=库存不足，已标记待补发，请先导入卡密再重试"),
+        Ok(_) => ard("/orders?msg=处理完成"),
+        Err(e) => ard(&format!("/orders?err={}", enc(&e))),
     }
 }
 
@@ -445,12 +579,14 @@ async fn order_deliver(State(state): State<SharedState>, Path(no): Path<String>)
 struct SettingsTpl {
     username: String,
     active: &'static str,
+    base: &'static str,
     site_name: String,
     site_mark: String,
     site_subtitle: String,
     announcement: String,
     default_theme: String,
     site_url: String,
+    admin_path: String,
     pay_mode: String,
     epay_gateway: String,
     epay_pid: String,
@@ -466,12 +602,14 @@ async fn settings_page(
     let tpl = SettingsTpl {
         username: admin.username,
         active: "settings",
+        base: admin_base(),
         site_name: g("site_name"),
         site_mark: g("site_mark"),
         site_subtitle: g("site_subtitle"),
         announcement: g("announcement"),
         default_theme: g("default_theme"),
         site_url: g("site_url"),
+        admin_path: crate::config::admin_slug().to_string(),
         pay_mode: g("pay_mode"),
         epay_gateway: g("epay_gateway"),
         epay_pid: g("epay_pid"),
@@ -489,6 +627,7 @@ pub struct SettingsForm {
     announcement: String,
     default_theme: String,
     site_url: String,
+    admin_path: String,
     pay_mode: String,
     epay_gateway: String,
     epay_pid: String,
@@ -498,14 +637,21 @@ pub struct SettingsForm {
 async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsForm>) -> Response {
     let theme = if f.default_theme == "light" { "light" } else { "dark" };
     let pay_mode = if f.pay_mode == "epay" { "epay" } else { "mock" };
+    let new_slug = match sanitize_slug(&f.admin_path) {
+        Some(s) => s,
+        None => {
+            return ard("/settings?err=后台路径需为 4-32 位字母数字（可含 - _），且不能使用 admin 等保留字")
+        }
+    };
     let db = state.db.lock().await;
-    let pairs: [(&str, &str); 10] = [
+    let pairs: [(&str, &str); 11] = [
         ("site_name", f.site_name.trim()),
         ("site_mark", f.site_mark.trim()),
         ("site_subtitle", f.site_subtitle.trim()),
         ("announcement", f.announcement.trim()),
         ("default_theme", theme),
         ("site_url", f.site_url.trim().trim_end_matches('/')),
+        ("admin_path", new_slug.as_str()),
         ("pay_mode", pay_mode),
         ("epay_gateway", f.epay_gateway.trim()),
         ("epay_pid", f.epay_pid.trim()),
@@ -513,10 +659,17 @@ async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsF
     ];
     for (k, v) in pairs {
         if let Err(e) = models::set_setting(&db, k, v) {
-            return Redirect::to(&format!("/admin/settings?err={}", enc(&e.to_string()))).into_response();
+            return ard(&format!("/settings?err={}", enc(&e.to_string())));
         }
     }
-    Redirect::to("/admin/settings?msg=已保存").into_response()
+    drop(db);
+    if new_slug != crate::config::admin_slug() {
+        return ard(&format!(
+            "/settings?msg={}",
+            enc(&format!("已保存。后台路径将在服务重启后变为 /{new_slug}"))
+        ));
+    }
+    ard("/settings?msg=已保存")
 }
 
 #[derive(Deserialize)]
@@ -532,7 +685,7 @@ async fn password_change(
 ) -> Response {
     let db = state.db.lock().await;
     match auth::change_password(&db, admin.id, &f.old_password, &f.new_password) {
-        Ok(_) => Redirect::to("/admin/login?msg=密码已修改，请重新登录").into_response(),
-        Err(e) => Redirect::to(&format!("/admin/settings?err={}", enc(&e))).into_response(),
+        Ok(_) => ard("/login?msg=密码已修改，请重新登录"),
+        Err(e) => ard(&format!("/settings?err={}", enc(&e))),
     }
 }

@@ -37,7 +37,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2 class="panel-sub">库存告警 <small>（在售且库存 &lt; 10）</small></h2>
-      <a class="btn btn-s" href="/admin/cards">导入卡密</a>
+      <a class="btn btn-s" href="{{ base }}/cards">导入卡密</a>
     </div>
     {% if low_stock.is_empty() %}
     <p class="empty-line">库存充足，暂无告警。</p>
@@ -61,7 +61,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2 class="panel-sub">最近订单</h2>
-      <a class="btn btn-s" href="/admin/orders">全部订单</a>
+      <a class="btn btn-s" href="{{ base }}/orders">全部订单</a>
     </div>
     {% if recent.is_empty() %}
     <p class="empty-line">还没有订单。</p>
