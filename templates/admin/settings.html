@@ -63,11 +63,73 @@
     </label>
     <p class="hint">切换为易支付后，收银台将展示支付宝 / 微信按钮并跳转网关收款；回调地址为 <span class="mono">站点地址/api/pay/epay/notify</span>。</p>
   </section>
+
+  <section class="panel col-span">
+    <h2 class="panel-sub">邮件通知（SMTP）</h2>
+    <label class="check big">
+      {% if mail_enabled %}<input type="checkbox" name="mail_enabled" value="1" checked>{% else %}<input type="checkbox" name="mail_enabled" value="1">{% endif %}
+      启用邮件通知
+    </label>
+    <p class="hint">开启后：买家付款发货成功时，自动把卡密寄到他填的邮箱（联系方式不是邮箱则跳过）；库存不足导致「已付待补发」时，给下面的店主邮箱发告警。发信失败只写日志，绝不影响发货本身。</p>
+
+    <div class="field-row">
+      <label class="field"><span class="field-name">SMTP 服务器</span>
+        <input name="smtp_host" value="{{ smtp_host }}" placeholder="smtp.qq.com" class="mono">
+      </label>
+      <label class="field"><span class="field-name">端口</span>
+        <input name="smtp_port" value="{{ smtp_port }}" class="mono" inputmode="numeric">
+      </label>
+      <label class="field"><span class="field-name">加密方式</span>
+        <select name="smtp_security">
+          {% if smtp_security == "starttls" %}
+          <option value="ssl">SSL / TLS（465）</option><option value="starttls" selected>STARTTLS（587）</option><option value="none">不加密</option>
+          {% else if smtp_security == "none" %}
+          <option value="ssl">SSL / TLS（465）</option><option value="starttls">STARTTLS（587）</option><option value="none" selected>不加密</option>
+          {% else %}
+          <option value="ssl" selected>SSL / TLS（465）</option><option value="starttls">STARTTLS（587）</option><option value="none">不加密</option>
+          {% endif %}
+        </select>
+      </label>
+    </div>
+
+    <div class="field-row">
+      <label class="field"><span class="field-name">登录账号</span>
+        <input name="smtp_user" value="{{ smtp_user }}" class="mono" autocomplete="off" placeholder="你的邮箱账号">
+      </label>
+      <label class="field">
+        <span class="field-name">授权码 / 密码 {% if smtp_pass_set %}<small>（已设置，留空表示不修改）</small>{% endif %}</span>
+        <input name="smtp_pass" type="password" class="mono" autocomplete="new-password"
+               placeholder="{% if smtp_pass_set %}保持不变{% else %}QQ/163 邮箱请填「授权码」{% endif %}">
+      </label>
+    </div>
+
+    <div class="field-row">
+      <label class="field"><span class="field-name">发件人邮箱</span>
+        <input name="mail_from" value="{{ mail_from }}" class="mono" placeholder="通常与登录账号相同">
+      </label>
+      <label class="field"><span class="field-name">发件人显示名 <small>（留空用站点名）</small></span>
+        <input name="mail_from_name" value="{{ mail_from_name }}" maxlength="30">
+      </label>
+      <label class="field"><span class="field-name">店主告警邮箱 <small>（缺货提醒收件人）</small></span>
+        <input name="mail_admin_to" value="{{ mail_admin_to }}" class="mono" placeholder="留空则不发告警">
+      </label>
+    </div>
+    <p class="hint">常见配置：QQ 邮箱 <span class="mono">smtp.qq.com</span> 端口 465 SSL，密码填设置里生成的授权码；163 邮箱 <span class="mono">smtp.163.com</span> 端口 465 SSL；Gmail <span class="mono">smtp.gmail.com</span> 端口 587 STARTTLS，密码填应用专用密码。改完请先「保存全部设置」，再用下面的按钮发测试信。</p>
+  </section>
 </div>
 <div class="save-bar">
   <button class="btn btn-primary" type="submit">保存全部设置</button>
 </div>
 </form>
+
+<section class="panel narrow">
+  <h2 class="panel-sub">发送测试邮件</h2>
+  <form method="post" action="{{ base }}/settings/test-mail" class="inline-form">
+    <input name="to" type="email" placeholder="收件邮箱，例如 you@example.com" required class="mono">
+    <button class="btn" type="submit">发测试信</button>
+  </form>
+  <p class="hint">用当前已保存的 SMTP 参数发一封信，即使「启用邮件通知」没打开也能测。发送会等待结果，失败时会把真实原因显示出来。</p>
+</section>
 
 <section class="panel narrow">
   <h2 class="panel-sub">修改密码</h2>

@@ -825,6 +825,50 @@ td .tag { font-size: 10.5px; }
 
 .save-bar { margin: 4px 0 18px; }
 .narrow { max-width: 560px; }
+.col-span { grid-column: 1 / -1; }
+.check.big { font-size: 14px; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+
+/* ---------- 批量操作 ---------- */
+
+.w-check { width: 30px; padding-right: 0 !important; }
+.w-check input { width: 15px; height: 15px; padding: 0; accent-color: var(--gold); cursor: pointer; }
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px 10px;
+  margin-bottom: 4px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-m);
+  background: var(--bg2);
+}
+.bulk-all { display: flex; align-items: center; gap: 7px; font-size: 12.5px; cursor: pointer; }
+.bulk-all input { width: 15px; height: 15px; accent-color: var(--gold); cursor: pointer; }
+.bulk-count { font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.bulk-bar .bulk-hint { color: var(--ink-3); margin-left: auto; text-align: right; }
+.bulk-bar button[disabled] { opacity: 0.45; cursor: not-allowed; }
+tr.picked td { background: color-mix(in srgb, var(--gold) 9%, transparent); }
+
+/* ---------- 分页 ---------- */
+
+.pager { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+.pg {
+  min-width: 32px;
+  padding: 6px 10px;
+  text-align: center;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  text-decoration: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+a.pg:hover { border-color: var(--gold); color: var(--ink); }
+.pg.cur { border-color: var(--gold); color: var(--bg0); background: var(--gold); font-weight: 700; }
+.pg.off { opacity: 0.35; }
+.pg.gap { border: none; padding: 6px 2px; min-width: 0; }
 
 /* ---------- 登录页 ---------- */
 

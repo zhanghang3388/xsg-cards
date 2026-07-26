@@ -1,0 +1,23 @@
+{% if pager.multi() %}
+<nav class="pager" aria-label="分页">
+  {% if pager.has_prev() %}
+  <a class="pg" href="{{ base }}{{ list_path }}?{{ qbase }}page={{ pager.prev() }}">‹ 上一页</a>
+  {% else %}
+  <span class="pg off">‹ 上一页</span>
+  {% endif %}
+  {% for p in pager.window() %}
+    {% if p == 0 %}
+    <span class="pg gap">…</span>
+    {% else if p == pager.page %}
+    <span class="pg cur">{{ p }}</span>
+    {% else %}
+    <a class="pg" href="{{ base }}{{ list_path }}?{{ qbase }}page={{ p }}">{{ p }}</a>
+    {% endif %}
+  {% endfor %}
+  {% if pager.has_next() %}
+  <a class="pg" href="{{ base }}{{ list_path }}?{{ qbase }}page={{ pager.next() }}">下一页 ›</a>
+  {% else %}
+  <span class="pg off">下一页 ›</span>
+  {% endif %}
+</nav>
+{% endif %}

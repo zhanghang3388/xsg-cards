@@ -24,36 +24,53 @@
 
 <section class="panel">
   <div class="panel-head">
-    <h2 class="panel-sub">订单列表 <small>（最多显示 300 条）</small></h2>
-    <span class="mono small">{{ orders.len() }} 条</span>
+    <h2 class="panel-sub">订单列表</h2>
+    <span class="mono small">{{ pager.range_str() }} / 共 {{ pager.total }} 条</span>
   </div>
   {% if orders.is_empty() %}
   <p class="empty-line">没有匹配的订单。</p>
   {% else %}
-  <table class="tbl">
-    <thead><tr><th>订单号</th><th>商品</th><th class="num">金额</th><th>联系方式</th><th>状态</th><th>支付</th><th>下单时间</th><th class="w-actions">操作</th></tr></thead>
-    <tbody>
-      {% for o in orders %}
-      <tr>
-        <td class="mono small">{{ o.order_no }}</td>
-        <td>{{ o.product_name }} × {{ o.quantity }}</td>
-        <td class="num mono">¥{{ o.total_str() }}</td>
-        <td class="small">{{ o.contact }}</td>
-        <td><span class="badge {{ o.status_class() }}">{{ o.status_label() }}</span></td>
-        <td class="small">{{ o.pay_method_label() }}</td>
-        <td class="mono small">{{ o.created_at }}</td>
-        <td class="row-actions">
-          <a class="btn btn-s" href="{{ o.view_link() }}" target="_blank" rel="noopener">查看</a>
-          {% if o.status == 0 %}
-          <form method="post" action="{{ base }}/orders/{{ o.order_no }}/deliver" onsubmit="return confirm('确认已线下收款，直接给该订单发货？')"><button class="btn btn-s" type="submit">补单</button></form>
-          {% else if o.status == 3 %}
-          <form method="post" action="{{ base }}/orders/{{ o.order_no }}/deliver" onsubmit="return confirm('重试给该订单发货？请确认已导入足够库存。')"><button class="btn btn-s warn-btn" type="submit">补发</button></form>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <form method="post" action="{{ base }}/orders/bulk-delete" data-bulk
+        onsubmit="return confirm('删除选中的订单？记录将永久消失，买家也无法再凭单号取卡，此操作不可撤销！')">
+    <input type="hidden" name="back" value="{{ back }}">
+    <div class="bulk-bar">
+      <label class="bulk-all"><input type="checkbox" data-bulk-all> 全选本页</label>
+      <span class="bulk-count" data-bulk-count>已选 0 项</span>
+      <button class="btn btn-s danger" type="submit" data-bulk-submit disabled>批量删除</button>
+      <span class="bulk-hint small">建议只清理「已过期」的废单；已完成订单删掉后买家就查不到卡密了。</span>
+    </div>
+    <table class="tbl">
+      <thead><tr><th class="w-check"></th><th>订单号</th><th>商品</th><th class="num">金额</th><th>联系方式</th><th>状态</th><th>支付</th><th>下单时间</th><th class="w-actions">操作</th></tr></thead>
+      <tbody>
+        {% for o in orders %}
+        <tr>
+          <td class="w-check"><input type="checkbox" name="ids" value="{{ o.id }}" data-bulk-item></td>
+          <td class="mono small">{{ o.order_no }}</td>
+          <td>{{ o.product_name }} × {{ o.quantity }}</td>
+          <td class="num mono">¥{{ o.total_str() }}</td>
+          <td class="small">{{ o.contact }}</td>
+          <td><span class="badge {{ o.status_class() }}">{{ o.status_label() }}</span></td>
+          <td class="small">{{ o.pay_method_label() }}</td>
+          <td class="mono small">{{ o.created_at }}</td>
+          <td class="row-actions">
+            <a class="btn btn-s" href="{{ o.view_link() }}" target="_blank" rel="noopener">查看</a>
+            {% if o.status == 0 %}
+            <button class="btn btn-s" type="submit" form="dlv{{ o.id }}" onclick="return confirm('确认已线下收款，直接给该订单发货？')">补单</button>
+            {% else if o.status == 3 %}
+            <button class="btn btn-s warn-btn" type="submit" form="dlv{{ o.id }}" onclick="return confirm('重试给该订单发货？请确认已导入足够库存。')">补发</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </form>
+  {% for o in orders %}
+  {% if o.status == 0 || o.status == 3 %}
+  <form id="dlv{{ o.id }}" method="post" action="{{ base }}/orders/{{ o.order_no }}/deliver" hidden></form>
+  {% endif %}
+  {% endfor %}
+  {% include "admin/_pager.html" %}
   {% endif %}
 </section>
 {% endblock %}

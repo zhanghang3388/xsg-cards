@@ -117,6 +117,17 @@ fn seed(conn: &Connection) -> Result<()> {
     set_default(conn, "epay_pid", "")?;
     set_default(conn, "epay_key", "")?;
 
+    // 邮件通知（默认关闭，参数由站长在后台填写）
+    set_default(conn, "mail_enabled", "0")?;
+    set_default(conn, "smtp_host", "")?;
+    set_default(conn, "smtp_port", "465")?;
+    set_default(conn, "smtp_security", "ssl")?; // ssl | starttls | none
+    set_default(conn, "smtp_user", "")?;
+    set_default(conn, "smtp_pass", "")?;
+    set_default(conn, "mail_from", "")?;
+    set_default(conn, "mail_from_name", "")?;
+    set_default(conn, "mail_admin_to", "")?;
+
     // 默认管理员 admin / admin123
     let admin_count: i64 = conn.query_row("SELECT COUNT(*) FROM admins", [], |r| r.get(0))?;
     if admin_count == 0 {

@@ -2,6 +2,71 @@ use crate::util::{cents_str, gen_order_no, minutes_ago_str, now_str};
 use rusqlite::{Connection, OptionalExtension, Result, Row};
 
 pub const ORDER_TTL_MIN: i64 = 15; // 待付订单有效期（分钟）
+pub const PER_PAGE: i64 = 50; // 后台列表每页条数
+
+/// 分页信息：模板里直接调用这些方法渲染页码条
+pub struct Pager {
+    pub page: i64,
+    pub per: i64,
+    pub total: i64,
+}
+
+impl Pager {
+    pub fn new(page: i64, total: i64) -> Self {
+        Pager {
+            page: page.max(1),
+            per: PER_PAGE,
+            total,
+        }
+    }
+    pub fn pages(&self) -> i64 {
+        ((self.total + self.per - 1) / self.per).max(1)
+    }
+    pub fn offset(&self) -> i64 {
+        (self.page - 1) * self.per
+    }
+    pub fn has_prev(&self) -> bool {
+        self.page > 1
+    }
+    pub fn has_next(&self) -> bool {
+        self.page < self.pages()
+    }
+    pub fn prev(&self) -> i64 {
+        (self.page - 1).max(1)
+    }
+    pub fn next(&self) -> i64 {
+        (self.page + 1).min(self.pages())
+    }
+    pub fn multi(&self) -> bool {
+        self.pages() > 1
+    }
+    /// 本页显示的区间，如「51-100 / 320」
+    pub fn range_str(&self) -> String {
+        if self.total == 0 {
+            return "0".into();
+        }
+        let from = self.offset() + 1;
+        let to = (self.offset() + self.per).min(self.total);
+        format!("{from}-{to}")
+    }
+    /// 页码窗口：当前页前后各两页，首尾必现，断档处用 0 表示省略号
+    pub fn window(&self) -> Vec<i64> {
+        let pages = self.pages();
+        let mut v: Vec<i64> = Vec::new();
+        let mut last = 0i64;
+        for p in 1..=pages {
+            let keep = p == 1 || p == pages || (p - self.page).abs() <= 2;
+            if keep {
+                if last > 0 && p - last > 1 {
+                    v.push(0);
+                }
+                v.push(p);
+                last = p;
+            }
+        }
+        v
+    }
+}
 
 // ---------- 站点设置 ----------
 
@@ -184,10 +249,38 @@ pub fn list_products_public(conn: &Connection, cat: Option<i64>) -> Result<Vec<P
     }
 }
 
-pub fn list_products_admin(conn: &Connection) -> Result<Vec<ProductView>> {
-    let sql = product_view_query("");
+pub fn count_products(conn: &Connection) -> i64 {
+    conn.query_row("SELECT COUNT(*) FROM products", [], |r| r.get(0))
+        .unwrap_or(0)
+}
+
+pub fn list_products_admin(conn: &Connection, pager: &Pager) -> Result<Vec<ProductView>> {
+    let sql = format!("{} LIMIT ?1 OFFSET ?2", product_view_query(""));
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map([], product_view_from_row)?;
+    let rows = stmt.query_map([pager.per, pager.offset()], product_view_from_row)?;
+    rows.collect()
+}
+
+/// 下拉框用：全部商品 + 当前库存，不分页（卡密页筛选与导入都要能选到任意商品）
+pub struct ProductOpt {
+    pub id: i64,
+    pub name: String,
+    pub stock: i64,
+}
+
+pub fn product_options(conn: &Connection) -> Result<Vec<ProductOpt>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.id, p.name,
+                (SELECT COUNT(*) FROM cards k WHERE k.product_id = p.id AND k.status = 0)
+         FROM products p ORDER BY p.sort DESC, p.id DESC",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(ProductOpt {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            stock: r.get(2)?,
+        })
+    })?;
     rows.collect()
 }
 
@@ -248,11 +341,39 @@ pub fn toggle_product(conn: &Connection, id: i64) -> Result<()> {
     Ok(())
 }
 
-/// 删除商品：连同未售卡密一起删除；已售卡密保留（历史订单可查）
-pub fn delete_product(conn: &Connection, id: i64) -> Result<()> {
-    conn.execute("DELETE FROM cards WHERE product_id = ?1 AND status != 1", [id])?;
-    conn.execute("DELETE FROM products WHERE id = ?1", [id])?;
+/// 删除商品：只删「在售(0)」卡密；已售(1) 保留以便历史订单可查；
+/// 若存在被待付订单锁定(2) 的卡密则拒绝删除——否则买家付款后会变成无法补发的死单。
+pub fn delete_product(conn: &Connection, id: i64) -> std::result::Result<(), String> {
+    let locked: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM cards WHERE product_id = ?1 AND status = 2",
+            [id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if locked > 0 {
+        return Err(format!(
+            "该商品有 {locked} 张卡密正被待付订单锁定，请等订单完成或超时释放（最多 {ORDER_TTL_MIN} 分钟）后再删除"
+        ));
+    }
+    conn.execute("DELETE FROM cards WHERE product_id = ?1 AND status = 0", [id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM products WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// 批量删除商品，返回 (已删除, 因有锁定卡而跳过)
+pub fn delete_products_bulk(conn: &Connection, ids: &[i64]) -> (usize, Vec<String>) {
+    let mut done = 0usize;
+    let mut skipped = Vec::new();
+    for id in ids {
+        match delete_product(conn, *id) {
+            Ok(()) => done += 1,
+            Err(_) => skipped.push(id.to_string()),
+        }
+    }
+    (done, skipped)
 }
 
 // ---------- 卡密 ----------
@@ -289,16 +410,13 @@ impl CardView {
     }
 }
 
-pub fn list_cards(
-    conn: &Connection,
+/// 卡密列表的筛选条件（供列表与计数共用，保证两者永远一致）
+fn cards_filter(
     product_id: Option<i64>,
     status: Option<i64>,
     q: &str,
-) -> Result<Vec<CardView>> {
-    let mut sql = String::from(
-        "SELECT k.id, k.code, k.status, k.order_id, k.created_at, COALESCE(k.sold_at,''), p.name
-         FROM cards k JOIN products p ON p.id = k.product_id WHERE 1=1",
-    );
+) -> (String, Vec<Box<dyn rusqlite::types::ToSql>>) {
+    let mut sql = String::from(" WHERE 1=1");
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     if let Some(pid) = product_id {
         sql.push_str(" AND k.product_id = ?");
@@ -312,7 +430,34 @@ pub fn list_cards(
         sql.push_str(" AND k.code LIKE ?");
         params.push(Box::new(format!("%{q}%")));
     }
-    sql.push_str(" ORDER BY k.id DESC LIMIT 800");
+    (sql, params)
+}
+
+pub fn count_cards(conn: &Connection, product_id: Option<i64>, status: Option<i64>, q: &str) -> i64 {
+    let (where_sql, params) = cards_filter(product_id, status, q);
+    let sql = format!(
+        "SELECT COUNT(*) FROM cards k JOIN products p ON p.id = k.product_id{where_sql}"
+    );
+    let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    conn.query_row(&sql, refs.as_slice(), |r| r.get(0))
+        .unwrap_or(0)
+}
+
+pub fn list_cards(
+    conn: &Connection,
+    product_id: Option<i64>,
+    status: Option<i64>,
+    q: &str,
+    pager: &Pager,
+) -> Result<Vec<CardView>> {
+    let (where_sql, mut params) = cards_filter(product_id, status, q);
+    let sql = format!(
+        "SELECT k.id, k.code, k.status, k.order_id, k.created_at, COALESCE(k.sold_at,''), p.name
+         FROM cards k JOIN products p ON p.id = k.product_id{where_sql}
+         ORDER BY k.id DESC LIMIT ? OFFSET ?"
+    );
+    params.push(Box::new(pager.per));
+    params.push(Box::new(pager.offset()));
     let mut stmt = conn.prepare(&sql)?;
     let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|b| b.as_ref()).collect();
     let rows = stmt.query_map(refs.as_slice(), |r| {
@@ -359,6 +504,23 @@ pub fn import_cards(conn: &mut Connection, product_id: i64, text: &str) -> Resul
 pub fn delete_card(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM cards WHERE id = ?1 AND status = 0", [id])?;
     Ok(())
+}
+
+/// 批量删除卡密：只删「在售(0)」的卡，已售出(1) 与被待付订单锁定(2) 的一律跳过，
+/// 避免破坏已完成订单的取卡记录、或让待付订单付款后无卡可发。
+/// 返回 (已删除, 跳过数)
+pub fn delete_cards_bulk(conn: &Connection, ids: &[i64]) -> Result<(usize, usize)> {
+    let mut done = 0usize;
+    let mut skipped = 0usize;
+    for id in ids {
+        let n = conn.execute("DELETE FROM cards WHERE id = ?1 AND status = 0", [id])?;
+        if n > 0 {
+            done += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+    Ok((done, skipped))
 }
 
 pub fn delete_unsold_cards(conn: &Connection, product_id: i64) -> Result<usize> {
@@ -623,32 +785,28 @@ pub fn order_codes(conn: &Connection, order_id: i64) -> Result<Vec<String>> {
     rows.collect()
 }
 
+/// 买家查单：必须同时提供订单号与联系方式，且两者都对上才返回。
+/// 单凭联系方式即可列出订单会让任何知道买家邮箱的人取走卡密。
 pub fn query_orders_by_contact(
     conn: &Connection,
     order_no: &str,
     contact: &str,
 ) -> Result<Vec<Order>> {
-    if !order_no.is_empty() {
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {ORDER_COLS} FROM orders WHERE order_no = ?1 AND contact = ?2"
-        ))?;
-        let rows = stmt.query_map([order_no, contact], order_from_row)?;
-        rows.collect()
-    } else {
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {ORDER_COLS} FROM orders WHERE contact = ?1 ORDER BY id DESC LIMIT 20"
-        ))?;
-        let rows = stmt.query_map([contact], order_from_row)?;
-        rows.collect()
+    if order_no.is_empty() || contact.is_empty() {
+        return Ok(Vec::new());
     }
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {ORDER_COLS} FROM orders WHERE order_no = ?1 AND contact = ?2"
+    ))?;
+    let rows = stmt.query_map([order_no, contact], order_from_row)?;
+    rows.collect()
 }
 
-pub fn list_orders_admin(
-    conn: &Connection,
+fn orders_filter(
     status: Option<i64>,
     q: &str,
-) -> Result<Vec<Order>> {
-    let mut sql = format!("SELECT {ORDER_COLS} FROM orders WHERE 1=1");
+) -> (String, Vec<Box<dyn rusqlite::types::ToSql>>) {
+    let mut sql = String::from(" WHERE 1=1");
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     if let Some(st) = status {
         sql.push_str(" AND status = ?");
@@ -661,11 +819,52 @@ pub fn list_orders_admin(
         params.push(Box::new(like.clone()));
         params.push(Box::new(like));
     }
-    sql.push_str(" ORDER BY id DESC LIMIT 300");
+    (sql, params)
+}
+
+pub fn count_orders_admin(conn: &Connection, status: Option<i64>, q: &str) -> i64 {
+    let (where_sql, params) = orders_filter(status, q);
+    let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    conn.query_row(
+        &format!("SELECT COUNT(*) FROM orders{where_sql}"),
+        refs.as_slice(),
+        |r| r.get(0),
+    )
+    .unwrap_or(0)
+}
+
+pub fn list_orders_admin(
+    conn: &Connection,
+    status: Option<i64>,
+    q: &str,
+    pager: &Pager,
+) -> Result<Vec<Order>> {
+    let (where_sql, mut params) = orders_filter(status, q);
+    let sql =
+        format!("SELECT {ORDER_COLS} FROM orders{where_sql} ORDER BY id DESC LIMIT ? OFFSET ?");
+    params.push(Box::new(pager.per));
+    params.push(Box::new(pager.offset()));
     let mut stmt = conn.prepare(&sql)?;
     let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|b| b.as_ref()).collect();
     let rows = stmt.query_map(refs.as_slice(), order_from_row)?;
     rows.collect()
+}
+
+/// 批量删除订单。待付订单锁定的卡密会被释放回在售；已完成订单的卡密解除关联但保留「已售」，
+/// 以免卡密变成既查不到订单又占着已售状态的孤儿。
+pub fn delete_orders_bulk(conn: &mut Connection, ids: &[i64]) -> Result<usize> {
+    let tx = conn.transaction()?;
+    let mut done = 0usize;
+    for id in ids {
+        tx.execute(
+            "UPDATE cards SET status = 0, order_id = NULL WHERE order_id = ?1 AND status = 2",
+            [id],
+        )?;
+        tx.execute("UPDATE cards SET order_id = NULL WHERE order_id = ?1", [id])?;
+        done += tx.execute("DELETE FROM orders WHERE id = ?1", [id])?;
+    }
+    tx.commit()?;
+    Ok(done)
 }
 
 // ---------- 仪表盘统计 ----------
@@ -706,13 +905,15 @@ pub fn dash_stats(conn: &Connection) -> Result<DashStats> {
     })
 }
 
-/// 库存告警（在售但库存 < 10）
+/// 库存告警（在售但库存 < 10）。商品可能很多，交给 SQL 过滤，别整表拉回来再筛。
 pub fn low_stock_products(conn: &Connection) -> Result<Vec<ProductView>> {
-    let all = list_products_admin(conn)?;
-    Ok(all
-        .into_iter()
-        .filter(|pv| pv.p.status == 1 && pv.stock < 10)
-        .collect())
+    let sql = format!(
+        "SELECT * FROM ({}) WHERE status = 1 AND stock < 10",
+        product_view_query("")
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], product_view_from_row)?;
+    rows.collect()
 }
 
 /// 公开统计：在售商品数 + 累计发卡数

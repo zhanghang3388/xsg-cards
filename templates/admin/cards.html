@@ -12,8 +12,8 @@
   <form method="get" action="{{ base }}/cards" class="inline-form">
     <select name="product">
       <option value="0">全部商品</option>
-      {% for pv in products %}
-      {% if pv.p.id == f_product %}<option value="{{ pv.p.id }}" selected>{{ pv.p.name }}</option>{% else %}<option value="{{ pv.p.id }}">{{ pv.p.name }}</option>{% endif %}
+      {% for po in products %}
+      {% if po.id == f_product %}<option value="{{ po.id }}" selected>{{ po.name }}</option>{% else %}<option value="{{ po.id }}">{{ po.name }}</option>{% endif %}
       {% endfor %}
     </select>
     <select name="status">
@@ -37,33 +37,53 @@
 
 <section class="panel">
   <div class="panel-head">
-    <h2 class="panel-sub">卡密列表 <small>（最多显示 800 条）</small></h2>
-    <span class="mono small">{{ cards.len() }} 条</span>
+    <h2 class="panel-sub">卡密列表</h2>
+    <span class="mono small">{{ pager.range_str() }} / 共 {{ pager.total }} 条</span>
   </div>
   {% if cards.is_empty() %}
   <p class="empty-line">没有匹配的卡密。点击右上角「批量导入」添加库存。</p>
   {% else %}
-  <table class="tbl">
-    <thead><tr><th class="w-s">ID</th><th>卡密</th><th>商品</th><th>状态</th><th>订单</th><th>入库时间</th><th>售出时间</th><th class="w-actions">操作</th></tr></thead>
-    <tbody>
-      {% for k in cards %}
-      <tr>
-        <td class="mono">{{ k.id }}</td>
-        <td class="mono code-cell">{{ k.code }}</td>
-        <td class="small">{{ k.product_name }}</td>
-        <td><span class="badge {{ k.status_class() }}">{{ k.status_label() }}</span></td>
-        <td class="mono small">{{ k.order_id_str() }}</td>
-        <td class="mono small">{{ k.created_at }}</td>
-        <td class="mono small">{{ k.sold_at_str }}</td>
-        <td class="row-actions">
-          {% if k.status == 0 %}
-          <form method="post" action="{{ base }}/cards/{{ k.id }}/delete" onsubmit="return confirm('删除这张卡密？')"><button class="btn btn-s danger" type="submit">删除</button></form>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <form method="post" action="{{ base }}/cards/bulk-delete" data-bulk
+        onsubmit="return confirm('删除选中的卡密？已售出与锁定中的会自动跳过，此操作不可撤销！')">
+    <input type="hidden" name="back" value="{{ back }}">
+    <div class="bulk-bar">
+      <label class="bulk-all"><input type="checkbox" data-bulk-all> 全选本页</label>
+      <span class="bulk-count" data-bulk-count>已选 0 项</span>
+      <button class="btn btn-s danger" type="submit" data-bulk-submit disabled>批量删除</button>
+      <span class="bulk-hint small">只会删除「在售」卡密，已售出的会保留以备查单。</span>
+    </div>
+    <table class="tbl">
+      <thead><tr><th class="w-check"></th><th class="w-s">ID</th><th>卡密</th><th>商品</th><th>状态</th><th>订单</th><th>入库时间</th><th>售出时间</th><th class="w-actions">操作</th></tr></thead>
+      <tbody>
+        {% for k in cards %}
+        <tr>
+          <td class="w-check">
+            {% if k.status == 0 %}<input type="checkbox" name="ids" value="{{ k.id }}" data-bulk-item>{% endif %}
+          </td>
+          <td class="mono">{{ k.id }}</td>
+          <td class="mono code-cell">{{ k.code }}</td>
+          <td class="small">{{ k.product_name }}</td>
+          <td><span class="badge {{ k.status_class() }}">{{ k.status_label() }}</span></td>
+          <td class="mono small">{{ k.order_id_str() }}</td>
+          <td class="mono small">{{ k.created_at }}</td>
+          <td class="mono small">{{ k.sold_at_str }}</td>
+          <td class="row-actions">
+            {% if k.status == 0 %}
+            <button class="btn btn-s danger" type="submit" form="delCard{{ k.id }}"
+                    onclick="return confirm('删除这张卡密？')">删除</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </form>
+  {% for k in cards %}
+  {% if k.status == 0 %}
+  <form id="delCard{{ k.id }}" method="post" action="{{ base }}/cards/{{ k.id }}/delete" hidden></form>
+  {% endif %}
+  {% endfor %}
+  {% include "admin/_pager.html" %}
   {% endif %}
 </section>
 
@@ -72,8 +92,8 @@
     <h2>批量导入卡密</h2>
     <label class="field"><span class="field-name">目标商品</span>
       <select name="product_id" required>
-        {% for pv in products %}
-        {% if pv.p.id == f_product %}<option value="{{ pv.p.id }}" selected>{{ pv.p.name }}（现库存 {{ pv.stock }}）</option>{% else %}<option value="{{ pv.p.id }}">{{ pv.p.name }}（现库存 {{ pv.stock }}）</option>{% endif %}
+        {% for po in products %}
+        {% if po.id == f_product %}<option value="{{ po.id }}" selected>{{ po.name }}（现库存 {{ po.stock }}）</option>{% else %}<option value="{{ po.id }}">{{ po.name }}（现库存 {{ po.stock }}）</option>{% endif %}
         {% endfor %}
       </select>
     </label>

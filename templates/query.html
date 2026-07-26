@@ -6,10 +6,10 @@
 <section class="query">
   <div class="panel query-panel">
     <h1>订单查询</h1>
-    <p class="verify-tip">输入下单时的联系方式即可找回订单与卡密；订单号可不填。</p>
+    <p class="verify-tip">需要同时输入订单号和下单时填的联系方式，两者都对上才能取回卡密——只知道其中一个的人查不到你的订单。</p>
     <form method="get" action="/query" class="query-form">
+      <input name="order_no" value="{{ order_no }}" placeholder="订单号（必填）" required class="mono">
       <input name="contact" value="{{ contact }}" placeholder="联系方式（必填）" required>
-      <input name="order_no" value="{{ order_no }}" placeholder="订单号（选填）" class="mono">
       <button class="btn btn-primary" type="submit">查询</button>
     </form>
   </div>
@@ -17,7 +17,7 @@
   {% if searched %}
     {% if orders.is_empty() %}
     <div class="empty">
-      <p>没有查到相关订单。请确认联系方式与下单时填写的一致。</p>
+      <p>没有查到相关订单。请确认订单号和联系方式都与下单时填写的一致。</p>
     </div>
     {% else %}
     <div class="query-list">

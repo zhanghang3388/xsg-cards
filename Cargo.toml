@@ -6,6 +6,7 @@ description = "潇洒哥的卡台 · 单商户自动发卡网"
 
 [dependencies]
 axum = { version = "0.8", features = ["multipart"] }
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1", "tokio1-rustls-tls", "builder", "hostname"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
 tower-http = { version = "0.6", features = ["fs"] }
 askama = "0.12"

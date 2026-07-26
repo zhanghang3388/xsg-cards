@@ -13,33 +13,58 @@
 {% endif %}
 
 <section class="panel">
-  <table class="tbl">
-    <thead><tr><th class="w-s">ID</th><th>商品</th><th>分类</th><th class="num">价格</th><th class="num">库存</th><th class="num">已售</th><th>状态</th><th class="w-actions">操作</th></tr></thead>
-    <tbody>
-      {% for pv in products %}
-      <tr>
-        <td class="mono">{{ pv.p.id }}</td>
-        <td>
-          <div class="cell-prod">
-            {% if pv.p.has_image() %}<img class="thumb" src="{{ pv.p.image }}" alt="" loading="lazy">{% else %}<span class="thumb thumb-ph" aria-hidden="true">无图</span>{% endif %}
-            <span class="strong">{{ pv.p.name }}</span>
-          </div>
-        </td>
-        <td><span class="tag">{{ pv.category_name }}</span></td>
-        <td class="num mono">¥{{ pv.price_str }}</td>
-        <td class="num mono {% if pv.stock < 10 %}danger-text{% endif %}">{{ pv.stock }}</td>
-        <td class="num mono">{{ pv.sold }}</td>
-        <td>{% if pv.p.status == 1 %}<span class="badge done">在售</span>{% else %}<span class="badge expired">下架</span>{% endif %}</td>
-        <td class="row-actions">
-          <button class="btn btn-s" type="button" data-dialog="pd{{ pv.p.id }}">编辑</button>
-          <a class="btn btn-s" href="{{ base }}/cards?product={{ pv.p.id }}">卡密</a>
-          <form method="post" action="{{ base }}/products/{{ pv.p.id }}/toggle"><button class="btn btn-s" type="submit">{% if pv.p.status == 1 %}下架{% else %}上架{% endif %}</button></form>
-          <form method="post" action="{{ base }}/products/{{ pv.p.id }}/delete" onsubmit="return confirm('删除商品「{{ pv.p.name }}」？未售卡密将一并删除！')"><button class="btn btn-s danger" type="submit">删除</button></form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="panel-head">
+    <h2 class="panel-sub">商品列表</h2>
+    <span class="mono small">{{ pager.range_str() }} / 共 {{ pager.total }} 个</span>
+  </div>
+  {% if products.is_empty() %}
+  <p class="empty-line">还没有商品。点击右上角「新增商品」创建第一个。</p>
+  {% else %}
+  <form method="post" action="{{ base }}/products/bulk-delete" data-bulk
+        onsubmit="return confirm('删除选中的商品？未售卡密会一并清除，此操作不可撤销！')">
+    <input type="hidden" name="back" value="{{ back }}">
+    <div class="bulk-bar">
+      <label class="bulk-all"><input type="checkbox" data-bulk-all> 全选本页</label>
+      <span class="bulk-count" data-bulk-count>已选 0 项</span>
+      <button class="btn btn-s danger" type="submit" data-bulk-submit disabled>批量删除</button>
+      <span class="bulk-hint small">已售卡密会保留以备买家查单；有待付订单锁定卡密的商品会被跳过。</span>
+    </div>
+    <table class="tbl">
+      <thead><tr><th class="w-check"></th><th class="w-s">ID</th><th>商品</th><th>分类</th><th class="num">价格</th><th class="num">库存</th><th class="num">已售</th><th>状态</th><th class="w-actions">操作</th></tr></thead>
+      <tbody>
+        {% for pv in products %}
+        <tr>
+          <td class="w-check"><input type="checkbox" name="ids" value="{{ pv.p.id }}" data-bulk-item></td>
+          <td class="mono">{{ pv.p.id }}</td>
+          <td>
+            <div class="cell-prod">
+              {% if pv.p.has_image() %}<img class="thumb" src="{{ pv.p.image }}" alt="" loading="lazy">{% else %}<span class="thumb thumb-ph" aria-hidden="true">无图</span>{% endif %}
+              <span class="strong">{{ pv.p.name }}</span>
+            </div>
+          </td>
+          <td><span class="tag">{{ pv.category_name }}</span></td>
+          <td class="num mono">¥{{ pv.price_str }}</td>
+          <td class="num mono {% if pv.stock < 10 %}danger-text{% endif %}">{{ pv.stock }}</td>
+          <td class="num mono">{{ pv.sold }}</td>
+          <td>{% if pv.p.status == 1 %}<span class="badge done">在售</span>{% else %}<span class="badge expired">下架</span>{% endif %}</td>
+          <td class="row-actions">
+            <button class="btn btn-s" type="button" data-dialog="pd{{ pv.p.id }}">编辑</button>
+            <a class="btn btn-s" href="{{ base }}/cards?product={{ pv.p.id }}">卡密</a>
+            <button class="btn btn-s" type="submit" form="tg{{ pv.p.id }}">{% if pv.p.status == 1 %}下架{% else %}上架{% endif %}</button>
+            <button class="btn btn-s danger" type="submit" form="dp{{ pv.p.id }}"
+                    onclick="return confirm('删除商品「{{ pv.p.name }}」？未售卡密将一并删除！')">删除</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </form>
+  {% for pv in products %}
+  <form id="tg{{ pv.p.id }}" method="post" action="{{ base }}/products/{{ pv.p.id }}/toggle" hidden></form>
+  <form id="dp{{ pv.p.id }}" method="post" action="{{ base }}/products/{{ pv.p.id }}/delete" hidden></form>
+  {% endfor %}
+  {% include "admin/_pager.html" %}
+  {% endif %}
 </section>
 
 <!-- 新增商品 -->

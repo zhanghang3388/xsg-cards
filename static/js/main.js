@@ -198,6 +198,51 @@
     });
   });
 
+  /* ---------- 后台：列表全选与批量操作 ---------- */
+  document.querySelectorAll("[data-bulk]").forEach(function (form) {
+    var all = form.querySelector("[data-bulk-all]");
+    var items = Array.prototype.slice.call(form.querySelectorAll("[data-bulk-item]"));
+    var count = form.querySelector("[data-bulk-count]");
+    var submit = form.querySelector("[data-bulk-submit]");
+    if (!items.length) return;
+
+    function sync() {
+      var picked = items.filter(function (i) { return i.checked; });
+      if (count) count.textContent = "已选 " + picked.length + " 项";
+      if (submit) submit.disabled = picked.length === 0;
+      if (all) {
+        all.checked = picked.length === items.length;
+        all.indeterminate = picked.length > 0 && picked.length < items.length;
+      }
+      items.forEach(function (i) {
+        var tr = i.closest("tr");
+        if (tr) tr.classList.toggle("picked", i.checked);
+      });
+    }
+
+    if (all) {
+      all.addEventListener("change", function () {
+        items.forEach(function (i) { i.checked = all.checked; });
+        sync();
+      });
+    }
+    items.forEach(function (i) { i.addEventListener("change", sync); });
+
+    // 点击整行的空白处也能勾选，鼠标少跑一趟
+    items.forEach(function (i) {
+      var tr = i.closest("tr");
+      if (!tr) return;
+      tr.addEventListener("click", function (ev) {
+        var t = ev.target;
+        if (t.closest("a, button, input, label, form")) return;
+        i.checked = !i.checked;
+        sync();
+      });
+    });
+
+    sync();
+  });
+
   /* ---------- 对话框 ---------- */
   document.querySelectorAll("[data-dialog]").forEach(function (btn) {
     btn.addEventListener("click", function () {

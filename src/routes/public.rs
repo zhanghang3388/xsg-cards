@@ -94,7 +94,8 @@ async fn query_page(State(state): State<SharedState>, Query(q): Query<QueryQ>) -
     let contact = q.contact.unwrap_or_default().trim().to_string();
     let db = state.db.lock().await;
     let site = models::site_ctx(&db);
-    let (orders, searched) = if !contact.is_empty() {
+    // 双凭证：订单号与联系方式必须同时提供且都对上，只知道邮箱的人取不走卡密
+    let (orders, searched) = if !contact.is_empty() && !order_no.is_empty() {
         (
             models::query_orders_by_contact(&db, &order_no, &contact).unwrap_or_default(),
             true,

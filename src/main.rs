@@ -1,6 +1,7 @@
 mod auth;
 mod config;
 mod db;
+mod mailer;
 mod models;
 mod payment;
 mod routes;

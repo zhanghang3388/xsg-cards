@@ -109,7 +109,10 @@ async fn mock_pay(State(state): State<SharedState>, Path(order_no): Path<String>
         return Json(serde_json::json!({"ok": false, "msg": "当前不是演示支付模式"})).into_response();
     }
     match models::deliver_order(&mut db, &order_no, "mock") {
-        Ok(st) => Json(serde_json::json!({"ok": true, "status": st})).into_response(),
+        Ok(st) => {
+            crate::mailer::notify_after_deliver(&db, &order_no, st);
+            Json(serde_json::json!({"ok": true, "status": st})).into_response()
+        }
         Err(e) => Json(serde_json::json!({"ok": false, "msg": e})).into_response(),
     }
 }
@@ -135,7 +138,10 @@ async fn epay_notify(
     }
     let pay_type = params.get("type").cloned().unwrap_or_else(|| "epay".into());
     match models::deliver_order(&mut db, &out_trade_no, &pay_type) {
-        Ok(_) => "success".into_response(),
+        Ok(st) => {
+            crate::mailer::notify_after_deliver(&db, &out_trade_no, st);
+            "success".into_response()
+        }
         Err(e) => {
             tracing::error!("发货失败 {out_trade_no}: {e}");
             format!("fail: {e}").into_response()

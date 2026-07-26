@@ -18,6 +18,69 @@ fn ard(path: &str) -> Response {
     Redirect::to(&format!("{}{}", admin_base(), path)).into_response()
 }
 
+/// 批量表单里回传的筛选条件（形如 `product=3&status=0&page=2`）。
+/// 会被拼进 Location 头，所以只保留查询串该有的字符，杜绝换行注入。
+fn sanitize_back(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || "=&_-.%".contains(*c))
+        .take(200)
+        .collect()
+}
+
+/// 带回筛选条件的跳转：`kind` 取 "msg" 或 "err"
+fn ard_back(path: &str, back: &str, kind: &str, msg: &str) -> Response {
+    let b = sanitize_back(back);
+    let sep = if b.is_empty() { "" } else { "&" };
+    ard(&format!("{path}?{b}{sep}{kind}={}", enc(msg)))
+}
+
+/// 把当前筛选条件拼成查询串，随批量表单回传，操作完能停在原页原筛选上。空值自动省略。
+fn build_back(parts: &[(&str, String)]) -> String {
+    parts
+        .iter()
+        .filter(|(_, v)| !v.is_empty())
+        .map(|(k, v)| format!("{k}={}", enc(v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+/// 翻页链接的前缀：不含 page 的筛选条件，非空时带尾随 &，模板里直接 `?{{ qbase }}page=N`
+fn build_qbase(parts: &[(&str, String)]) -> String {
+    let s = build_back(parts);
+    if s.is_empty() {
+        s
+    } else {
+        format!("{s}&")
+    }
+}
+
+/// 解析批量操作表单：同名 checkbox 会重复出现，serde_urlencoded 映射不成 Vec，手动拆。
+/// 返回 (去重后的 id 列表, 回跳的查询串)
+fn parse_bulk(body: &str) -> (Vec<i64>, String) {
+    let mut ids: Vec<i64> = Vec::new();
+    let mut back = String::new();
+    for pair in body.split('&') {
+        let Some((k, v)) = pair.split_once('=') else {
+            continue;
+        };
+        let decoded = urlencoding::decode(&v.replace('+', " "))
+            .map(|c| c.into_owned())
+            .unwrap_or_default();
+        match k {
+            "ids" => {
+                if let Ok(n) = decoded.trim().parse::<i64>() {
+                    ids.push(n);
+                }
+            }
+            "back" => back = decoded,
+            _ => {}
+        }
+    }
+    ids.sort_unstable();
+    ids.dedup();
+    (ids, back)
+}
+
 pub fn router(state: SharedState) -> Router<SharedState> {
     let protected = Router::new()
         .route("/", get(dashboard))
@@ -28,13 +91,17 @@ pub fn router(state: SharedState) -> Router<SharedState> {
         .route("/products/{id}", post(product_update))
         .route("/products/{id}/toggle", post(product_toggle))
         .route("/products/{id}/delete", post(product_delete))
+        .route("/products/bulk-delete", post(products_bulk_delete))
         .route("/cards", get(cards_page))
         .route("/cards/import", post(cards_import))
         .route("/cards/{id}/delete", post(card_delete))
         .route("/cards/delete-unsold", post(cards_delete_unsold))
+        .route("/cards/bulk-delete", post(cards_bulk_delete))
         .route("/orders", get(orders_page))
         .route("/orders/{no}/deliver", post(order_deliver))
+        .route("/orders/bulk-delete", post(orders_bulk_delete))
         .route("/settings", get(settings_page).post(settings_save))
+        .route("/settings/test-mail", post(test_mail))
         .route("/password", post(password_change))
         .route_layer(middleware::from_fn_with_state(state, auth::require_admin))
         // 商品图片上传需要更大的请求体上限
@@ -143,7 +210,8 @@ async fn dashboard(
         Err(e) => return err_page(&e.to_string()),
     };
     let low_stock = models::low_stock_products(&db).unwrap_or_default();
-    let mut recent = models::list_orders_admin(&db, None, "").unwrap_or_default();
+    let mut recent =
+        models::list_orders_admin(&db, None, "", &models::Pager::new(1, 10)).unwrap_or_default();
     recent.truncate(10);
     drop(db);
     html(DashTpl {
@@ -238,22 +306,38 @@ struct ProductsTpl {
     base: &'static str,
     products: Vec<ProductView>,
     cats: Vec<Category>,
+    pager: models::Pager,
+    qbase: String,
+    list_path: &'static str,
+    back: String,
+}
+
+#[derive(Deserialize)]
+pub struct PageQ {
+    page: Option<i64>,
 }
 
 async fn products_page(
     State(state): State<SharedState>,
     Extension(admin): Extension<AdminUser>,
+    Query(qs): Query<PageQ>,
 ) -> Response {
     let db = state.db.lock().await;
-    let products = models::list_products_admin(&db).unwrap_or_default();
+    let pager = models::Pager::new(qs.page.unwrap_or(1), models::count_products(&db));
+    let products = models::list_products_admin(&db, &pager).unwrap_or_default();
     let cats = models::list_categories(&db).unwrap_or_default();
     drop(db);
+    let back = build_back(&[("page", pager.page.to_string())]);
     html(ProductsTpl {
         username: admin.username,
         active: "products",
         base: admin_base(),
         products,
         cats,
+        pager,
+        qbase: String::new(),
+        list_path: "/products",
+        back,
     })
 }
 
@@ -411,10 +495,41 @@ async fn product_delete(State(state): State<SharedState>, Path(id): Path<i64>) -
     match models::delete_product(&db, id) {
         Ok(_) => {
             upload::remove_local(&image);
-            ard("/products?msg=已删除（未售卡密一并清除）")
+            ard("/products?msg=已删除（未售卡密一并清除，已售卡密保留以备查单）")
         }
-        Err(e) => ard(&format!("/products?err={}", enc(&e.to_string()))),
+        Err(e) => ard(&format!("/products?err={}", enc(&e))),
     }
+}
+
+async fn products_bulk_delete(State(state): State<SharedState>, body: String) -> Response {
+    let (ids, back) = parse_bulk(&body);
+    if ids.is_empty() {
+        return ard_back("/products", &back, "err", "请先勾选要删除的商品");
+    }
+    let db = state.db.lock().await;
+    let images: Vec<String> = ids.iter().map(|i| models::product_image(&db, *i)).collect();
+    let (done, skipped) = models::delete_products_bulk(&db, &ids);
+    // 只清理「确实已被删掉」的商品图片：按成功计数猜是哪几个不靠谱，逐个确认商品是否还在。
+    for (i, id) in ids.iter().enumerate() {
+        let still: i64 = db
+            .query_row("SELECT COUNT(*) FROM products WHERE id = ?1", [id], |r| {
+                r.get(0)
+            })
+            .unwrap_or(1);
+        if still == 0 {
+            upload::remove_local(&images[i]);
+        }
+    }
+    drop(db);
+    let msg = if skipped.is_empty() {
+        format!("已删除 {done} 个商品")
+    } else {
+        format!(
+            "已删除 {done} 个商品，{} 个因卡密被待付订单锁定而跳过",
+            skipped.len()
+        )
+    };
+    ard_back("/products", &back, "msg", &msg)
 }
 
 // ---------- 卡密 ----------
@@ -426,10 +541,14 @@ struct CardsTpl {
     active: &'static str,
     base: &'static str,
     cards: Vec<CardView>,
-    products: Vec<ProductView>,
+    products: Vec<models::ProductOpt>,
     f_product: i64,
     f_status: i64,
     q: String,
+    pager: models::Pager,
+    back: String,
+    qbase: String,
+    list_path: &'static str,
 }
 
 #[derive(Deserialize)]
@@ -437,6 +556,7 @@ pub struct CardsQ {
     product: Option<i64>,
     status: Option<i64>,
     q: Option<String>,
+    page: Option<i64>,
 }
 
 async fn cards_page(
@@ -447,16 +567,25 @@ async fn cards_page(
     let f_product = qs.product.unwrap_or(0);
     let f_status = qs.status.unwrap_or(-1);
     let q = qs.q.unwrap_or_default();
+    let pid = if f_product > 0 { Some(f_product) } else { None };
+    let st = if f_status >= 0 { Some(f_status) } else { None };
     let db = state.db.lock().await;
-    let cards = models::list_cards(
-        &db,
-        if f_product > 0 { Some(f_product) } else { None },
-        if f_status >= 0 { Some(f_status) } else { None },
-        q.trim(),
-    )
-    .unwrap_or_default();
-    let products = models::list_products_admin(&db).unwrap_or_default();
+    let pager = models::Pager::new(
+        qs.page.unwrap_or(1),
+        models::count_cards(&db, pid, st, q.trim()),
+    );
+    let cards = models::list_cards(&db, pid, st, q.trim(), &pager).unwrap_or_default();
+    let products = models::product_options(&db).unwrap_or_default();
     drop(db);
+    let filters = [
+        ("product", pid.map(|v| v.to_string()).unwrap_or_default()),
+        ("status", st.map(|v| v.to_string()).unwrap_or_default()),
+        ("q", q.trim().to_string()),
+    ];
+    let qbase = build_qbase(&filters);
+    let mut back_parts = filters.to_vec();
+    back_parts.push(("page", pager.page.to_string()));
+    let back = build_back(&back_parts);
     html(CardsTpl {
         username: admin.username,
         active: "cards",
@@ -466,6 +595,10 @@ async fn cards_page(
         f_product,
         f_status,
         q,
+        pager,
+        back,
+        qbase,
+        list_path: "/cards",
     })
 }
 
@@ -494,6 +627,27 @@ async fn card_delete(State(state): State<SharedState>, Path(id): Path<i64>) -> R
     let db = state.db.lock().await;
     let _ = models::delete_card(&db, id);
     ard("/cards?msg=已删除（仅可删除未售卡密）")
+}
+
+async fn cards_bulk_delete(State(state): State<SharedState>, body: String) -> Response {
+    let (ids, back) = parse_bulk(&body);
+    if ids.is_empty() {
+        return ard_back("/cards", &back, "err", "请先勾选要删除的卡密");
+    }
+    let db = state.db.lock().await;
+    let r = models::delete_cards_bulk(&db, &ids);
+    drop(db);
+    match r {
+        Ok((done, skip)) => {
+            let msg = if skip > 0 {
+                format!("已删除 {done} 张，{skip} 张已售或锁定中未删")
+            } else {
+                format!("已删除 {done} 张卡密")
+            };
+            ard_back("/cards", &back, "msg", &msg)
+        }
+        Err(e) => ard_back("/cards", &back, "err", &e.to_string()),
+    }
 }
 
 #[derive(Deserialize)]
@@ -527,12 +681,17 @@ struct OrdersTpl {
     orders: Vec<Order>,
     f_status: i64,
     q: String,
+    pager: models::Pager,
+    back: String,
+    qbase: String,
+    list_path: &'static str,
 }
 
 #[derive(Deserialize)]
 pub struct OrdersQ {
     status: Option<i64>,
     q: Option<String>,
+    page: Option<i64>,
 }
 
 async fn orders_page(
@@ -542,15 +701,23 @@ async fn orders_page(
 ) -> Response {
     let f_status = qs.status.unwrap_or(-1);
     let q = qs.q.unwrap_or_default();
+    let st = if f_status >= 0 { Some(f_status) } else { None };
     let mut db = state.db.lock().await;
     let _ = models::expire_stale_orders(&mut db);
-    let orders = models::list_orders_admin(
-        &db,
-        if f_status >= 0 { Some(f_status) } else { None },
-        q.trim(),
-    )
-    .unwrap_or_default();
+    let pager = models::Pager::new(
+        qs.page.unwrap_or(1),
+        models::count_orders_admin(&db, st, q.trim()),
+    );
+    let orders = models::list_orders_admin(&db, st, q.trim(), &pager).unwrap_or_default();
     drop(db);
+    let filters = [
+        ("status", st.map(|v| v.to_string()).unwrap_or_default()),
+        ("q", q.trim().to_string()),
+    ];
+    let qbase = build_qbase(&filters);
+    let mut back_parts = filters.to_vec();
+    back_parts.push(("page", pager.page.to_string()));
+    let back = build_back(&back_parts);
     html(OrdersTpl {
         username: admin.username,
         active: "orders",
@@ -558,17 +725,40 @@ async fn orders_page(
         orders,
         f_status,
         q,
+        pager,
+        back,
+        qbase,
+        list_path: "/orders",
     })
 }
 
 /// 人工补单 / 补发：待支付或已付待补发的订单直接发货
 async fn order_deliver(State(state): State<SharedState>, Path(no): Path<String>) -> Response {
     let mut db = state.db.lock().await;
-    match models::deliver_order(&mut db, &no, "manual") {
+    let r = models::deliver_order(&mut db, &no, "manual");
+    if let Ok(st) = &r {
+        crate::mailer::notify_after_deliver(&db, &no, *st);
+    }
+    drop(db);
+    match r {
         Ok(1) => ard("/orders?msg=已发货"),
         Ok(3) => ard("/orders?err=库存不足，已标记待补发，请先导入卡密再重试"),
         Ok(_) => ard("/orders?msg=处理完成"),
         Err(e) => ard(&format!("/orders?err={}", enc(&e))),
+    }
+}
+
+async fn orders_bulk_delete(State(state): State<SharedState>, body: String) -> Response {
+    let (ids, back) = parse_bulk(&body);
+    if ids.is_empty() {
+        return ard_back("/orders", &back, "err", "请先勾选要删除的订单");
+    }
+    let mut db = state.db.lock().await;
+    let r = models::delete_orders_bulk(&mut db, &ids);
+    drop(db);
+    match r {
+        Ok(n) => ard_back("/orders", &back, "msg", &format!("已删除 {n} 笔订单")),
+        Err(e) => ard_back("/orders", &back, "err", &e.to_string()),
     }
 }
 
@@ -591,6 +781,15 @@ struct SettingsTpl {
     epay_gateway: String,
     epay_pid: String,
     epay_key: String,
+    mail_enabled: bool,
+    smtp_host: String,
+    smtp_port: String,
+    smtp_security: String,
+    smtp_user: String,
+    smtp_pass_set: bool,
+    mail_from: String,
+    mail_from_name: String,
+    mail_admin_to: String,
 }
 
 async fn settings_page(
@@ -614,6 +813,16 @@ async fn settings_page(
         epay_gateway: g("epay_gateway"),
         epay_pid: g("epay_pid"),
         epay_key: g("epay_key"),
+        mail_enabled: g("mail_enabled") == "1",
+        smtp_host: g("smtp_host"),
+        smtp_port: g("smtp_port"),
+        smtp_security: g("smtp_security"),
+        smtp_user: g("smtp_user"),
+        // 密码永不回显，只告诉页面「已设置过」
+        smtp_pass_set: !g("smtp_pass").is_empty(),
+        mail_from: g("mail_from"),
+        mail_from_name: g("mail_from_name"),
+        mail_admin_to: g("mail_admin_to"),
     };
     drop(db);
     html(tpl)
@@ -632,6 +841,15 @@ pub struct SettingsForm {
     epay_gateway: String,
     epay_pid: String,
     epay_key: String,
+    mail_enabled: Option<String>,
+    smtp_host: String,
+    smtp_port: String,
+    smtp_security: String,
+    smtp_user: String,
+    smtp_pass: String,
+    mail_from: String,
+    mail_from_name: String,
+    mail_admin_to: String,
 }
 
 async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsForm>) -> Response {
@@ -643,8 +861,23 @@ async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsF
             return ard("/settings?err=后台路径需为 4-32 位字母数字（可含 - _），且不能使用 admin 等保留字")
         }
     };
+    let mail_on = if f.mail_enabled.is_some() { "1" } else { "0" };
+    let security = match f.smtp_security.as_str() {
+        "starttls" => "starttls",
+        "none" => "none",
+        _ => "ssl",
+    };
+    let port = f.smtp_port.trim().parse::<u16>().unwrap_or(0);
+    if mail_on == "1" && port == 0 {
+        return ard("/settings?err=SMTP 端口需为 1-65535 的数字（SSL 常用 465，STARTTLS 常用 587）");
+    }
+    let port_str = if port == 0 {
+        "465".to_string()
+    } else {
+        port.to_string()
+    };
     let db = state.db.lock().await;
-    let pairs: [(&str, &str); 11] = [
+    let pairs: [(&str, &str); 19] = [
         ("site_name", f.site_name.trim()),
         ("site_mark", f.site_mark.trim()),
         ("site_subtitle", f.site_subtitle.trim()),
@@ -656,9 +889,23 @@ async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsF
         ("epay_gateway", f.epay_gateway.trim()),
         ("epay_pid", f.epay_pid.trim()),
         ("epay_key", f.epay_key.trim()),
+        ("mail_enabled", mail_on),
+        ("smtp_host", f.smtp_host.trim()),
+        ("smtp_port", port_str.as_str()),
+        ("smtp_security", security),
+        ("smtp_user", f.smtp_user.trim()),
+        ("mail_from", f.mail_from.trim()),
+        ("mail_from_name", f.mail_from_name.trim()),
+        ("mail_admin_to", f.mail_admin_to.trim()),
     ];
     for (k, v) in pairs {
         if let Err(e) = models::set_setting(&db, k, v) {
+            return ard(&format!("/settings?err={}", enc(&e.to_string())));
+        }
+    }
+    // 密码留空 = 沿用原值，这样保存其它设置时不用重新输一遍授权码
+    if !f.smtp_pass.is_empty() {
+        if let Err(e) = models::set_setting(&db, "smtp_pass", f.smtp_pass.trim()) {
             return ard(&format!("/settings?err={}", enc(&e.to_string())));
         }
     }
@@ -670,6 +917,35 @@ async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsF
         ));
     }
     ard("/settings?msg=已保存")
+}
+
+#[derive(Deserialize)]
+pub struct TestMailForm {
+    to: String,
+}
+
+/// 发一封测试信，验证 SMTP 参数是否可用。这里同步等待发送结果，
+/// 因为站长需要看到真实的错误原因（认证失败 / 端口不通 / 发件人被拒）。
+async fn test_mail(State(state): State<SharedState>, Form(f): Form<TestMailForm>) -> Response {
+    let to = f.to.trim().to_string();
+    if !crate::mailer::is_email(&to) {
+        return ard("/settings?err=请填写一个有效的收件邮箱");
+    }
+    let db = state.db.lock().await;
+    let mut cfg = crate::mailer::mail_cfg(&db);
+    drop(db);
+    // 测试信不受「启用」开关限制，方便先测通再打开
+    cfg.enabled = true;
+    if cfg.host.is_empty() || cfg.from.is_empty() {
+        return ard("/settings?err=请先填写 SMTP 服务器与发件人地址并保存，再发测试信");
+    }
+    match crate::mailer::send_test(cfg, to.clone()).await {
+        Ok(()) => ard(&format!(
+            "/settings?msg={}",
+            enc(&format!("测试邮件已发往 {to}，请查收（也看看垃圾箱）"))
+        )),
+        Err(e) => ard(&format!("/settings?err={}", enc(&e))),
+    }
 }
 
 #[derive(Deserialize)]
