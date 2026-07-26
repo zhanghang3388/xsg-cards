@@ -6,3 +6,5 @@ data.db-shm
 node_modules
 codex_vps_ed25519*
 /uploads
+# 设计预览稿：内嵌 base64 字体、体积大，且铺进模板后即被取代
+/preview
