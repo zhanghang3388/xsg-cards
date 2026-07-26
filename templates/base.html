@@ -9,12 +9,14 @@
 <script>(function(){try{var t=localStorage.getItem('kz-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();</script>
 </head>
 <body>
+<div class="spine" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 <header class="site-head">
   <div class="wrap head-in">
     <a class="brand" href="/" aria-label="{{ site.name }} 首页">
-      <svg class="brand-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h20a2 2 0 0 1 2 2v5.5a3 3 0 0 0 0 5V24a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5.5a3 3 0 0 0 0-5V8z" fill="currentColor"/><path d="M17.6 9.5 12.8 17h3.1l-1.5 5.5 4.8-7.5h-3.1l1.5-5.5z" fill="var(--bg1)"/></svg>
+      <svg class="brand-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M6 3h20a2 2 0 0 1 2 2v17.5L21.5 29H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-3z" fill="currentColor" opacity=".22"/><path d="M6 3h20a2 2 0 0 1 2 2v17.6L21.6 29H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="8.5" y="7" width="15" height="9" fill="currentColor"/><path d="M9 24h2.5M13 24h2.5M17 24h2.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="butt"/></svg>
       <span class="brand-name">{{ site.name }}</span>
-      <span class="brand-mark mono">{{ site.mark }}</span>
+      <span class="brand-mark">{{ site.mark }}</span>
+      <span class="pwr" aria-hidden="true"></span>
     </a>
     <nav class="nav">
       <a href="/">首页</a>
@@ -31,7 +33,7 @@
 </main>
 <footer class="site-foot">
   <div class="wrap foot-in">
-    <span class="mono">{{ site.mark }}</span>
+    <span class="mk">{{ site.mark }}</span>
     <span>{{ site.name }} · 全自动发卡</span>
     <span class="foot-links"><a href="/query">订单查询</a></span>
   </div>

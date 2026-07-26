@@ -184,6 +184,12 @@ impl Product {
     pub fn has_image(&self) -> bool {
         !self.image.is_empty()
     }
+
+    /// 模板用：没配图时拿商品名首字当字标印在标签纸上。
+    /// 走 chars() 而非字节切片，中文名不会被拦腰截断。
+    pub fn initial(&self) -> String {
+        self.name.chars().next().map(String::from).unwrap_or_default()
+    }
 }
 
 fn product_from_row(r: &Row) -> Result<Product> {

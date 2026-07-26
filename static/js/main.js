@@ -1,4 +1,4 @@
-/* 潇洒哥的卡台 · 前端交互：主题切换 / Toast / 复制 / 刮开显码 / 数量步进 / 收银台轮询 / 对话框 */
+/* 潇洒哥的卡台 · 前端交互：主题切换 / Toast / 复制 / 撕封显码 / 数量步进 / 收银台轮询 / 对话框 */
 (function () {
   "use strict";
 
@@ -83,7 +83,7 @@
     });
   }
 
-  /* ---------- 刮开显码 ---------- */
+  /* ---------- 撕封显码 ---------- */
   function reveal(el) { el.classList.add("revealed"); }
   document.addEventListener("click", function (ev) {
     var s = ev.target.closest(".scratch");

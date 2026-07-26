@@ -3,15 +3,25 @@
 {% block body %}
 <section class="hero">
   <div class="hero-main">
-    <p class="eyebrow mono">AUTO DELIVERY · 24H ONLINE</p>
+    <p class="eyebrow pix">AUTO DELIVERY · 24H ONLINE</p>
     <h1 class="hero-title">选卡 · 付款 · <em>秒到</em></h1>
     <p class="hero-sub">{{ site.subtitle }}</p>
-    <p class="hero-stats mono">在售 <b>{{ on_sale }}</b> 种商品 · 已发出 <b>{{ sold_total }}</b> 张卡密</p>
+    <!-- 街机计分屏：数字用像素字，压在内凹的琥珀屏里 -->
+    <div class="led-screen" role="group" aria-label="实时数据">
+      <div class="led-cell"><span class="led-k">在售</span><b class="led-v">{{ on_sale }}</b></div>
+      <div class="led-cell"><span class="led-k">已发出</span><b class="led-v">{{ sold_total }}</b></div>
+      <div class="led-cell"><span class="led-k">到账</span><b class="led-v">秒</b></div>
+    </div>
   </div>
   {% if !site.announcement.is_empty() %}
-  <aside class="notice" aria-label="站点公告">
-    <div class="notice-head"><span class="pin" aria-hidden="true"></span>公告</div>
+  <!-- 公告做成说明书内页：左侧红装订线 + 三个打孔 -->
+  <aside class="manual" aria-label="站点公告">
+    <span class="punch p1" aria-hidden="true"></span>
+    <span class="punch p2" aria-hidden="true"></span>
+    <span class="punch p3" aria-hidden="true"></span>
+    <div class="manual-head"><span class="pix">NOTICE</span>公告</div>
     <p>{{ site.announcement }}</p>
+    <span class="manual-pg pix">P.01</span>
   </aside>
   {% endif %}
 </section>
@@ -31,27 +41,32 @@
 {% else %}
 <div class="grid">
   {% for pv in products %}
-  <a class="ticket" href="/p/{{ pv.p.id }}">
-    <span class="notch notch-l" aria-hidden="true"></span>
-    <span class="notch notch-r" aria-hidden="true"></span>
-    <div class="ticket-edge" aria-hidden="true"></div>
-    <div class="ticket-body">
+  <a class="cart" href="/p/{{ pv.p.id }}">
+    <!-- 标签纸：卡带正面那张贴纸 -->
+    <div class="cart-label">
       {% if pv.p.has_image() %}
-      <div class="ticket-img"><img src="{{ pv.p.image }}" alt="{{ pv.p.name }}" loading="lazy" decoding="async"></div>
+      <div class="cart-art"><img src="{{ pv.p.image }}" alt="{{ pv.p.name }}" loading="lazy" decoding="async">
+      {% else %}
+      <div class="cart-art blank"><b aria-hidden="true">{{ pv.p.initial() }}</b>
       {% endif %}
-      <div class="ticket-top">
-        <span class="tag">{{ pv.category_name }}</span>
         {% if pv.stock == 0 %}<span class="badge out">缺货</span>
         {% else if pv.stock < 10 %}<span class="badge low">仅剩 {{ pv.stock }}</span>
         {% else %}<span class="badge in">现货</span>{% endif %}
       </div>
-      <h3 class="ticket-name">{{ pv.p.name }}</h3>
-      <div class="ticket-meta mono">库存 ×{{ pv.stock }}　已售 {{ pv.sold }}</div>
-      <div class="ticket-foot">
-        <span class="price mono"><i>¥</i>{{ pv.price_str }}</span>
-        {% if pv.stock > 0 %}<span class="buy-cue">立即购买 →</span>{% else %}<span class="buy-cue dim">暂时售罄</span>{% endif %}
-      </div>
+      <span class="tag">{{ pv.category_name }}</span>
+      <h3 class="cart-name">{{ pv.p.name }}</h3>
+      <div class="cart-rule" aria-hidden="true"><i></i><i></i><i></i></div>
     </div>
+    <!-- 塑料壳 -->
+    <div class="cart-shell">
+      <div class="cart-row">
+        <span class="price mono"><i>¥</i>{{ pv.price_str }}</span>
+        <span class="cart-stat mono">库存 {{ pv.stock }}<br>已售 {{ pv.sold }}</span>
+      </div>
+      {% if pv.stock > 0 %}<div class="cta">立即购买 →</div>{% else %}<div class="cta off">暂时售罄</div>{% endif %}
+    </div>
+    <!-- 金手指触点 -->
+    <div class="pins" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   </a>
   {% endfor %}
 </div>

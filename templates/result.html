@@ -20,7 +20,7 @@
     <div class="seal" aria-hidden="true">✓</div>
     <div>
       <h1>发货成功</h1>
-      <p>以下是你的卡密，点击刮层查看。此页可凭订单号 + 联系方式随时找回。</p>
+      <p>以下是你的卡密，点击封条撕开查看。此页可凭订单号 + 联系方式随时找回。</p>
     </div>
   </div>
 
@@ -32,9 +32,9 @@
     {% for code in codes %}
     <div class="code-item">
       <span class="code-index mono">#{{ loop.index }}</span>
-      <div class="scratch" tabindex="0" role="button" aria-label="刮开查看第 {{ loop.index }} 张卡密">
+      <div class="scratch" tabindex="0" role="button" aria-label="撕开封条查看第 {{ loop.index }} 张卡密">
         <span class="code mono">{{ code }}</span>
-        <span class="scratch-cover"><i aria-hidden="true"></i>刮开查看</span>
+        <span class="scratch-cover"><i aria-hidden="true"></i>TEAR TO OPEN · 撕开</span>
       </div>
       <button class="btn-copy" data-copy="{{ code }}" type="button">复制</button>
     </div>
