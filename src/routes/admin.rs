@@ -895,7 +895,7 @@ async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsF
         ("site_url", f.site_url.trim().trim_end_matches('/')),
         ("admin_path", new_slug.as_str()),
         ("pay_mode", pay_mode),
-        ("epay_gateway", f.epay_gateway.trim()),
+        ("epay_gateway", f.epay_gateway.trim().trim_end_matches('/')),
         ("epay_pid", f.epay_pid.trim()),
         ("epay_key", f.epay_key.trim()),
         ("epay_alipay", alipay_on),

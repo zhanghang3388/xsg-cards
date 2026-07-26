@@ -33,7 +33,11 @@ pub fn pay_config(conn: &Connection) -> PayConfig {
             let m = get_setting(conn, "pay_mode");
             if m == "epay" { m } else { "mock".into() }
         },
-        gateway: get_setting(conn, "epay_gateway"),
+        // 站长很容易连着尾部斜杠一起粘进来，模板还要接 /submit.php，
+        // 不削掉就会拼出 https://pay.example.com//submit.php
+        gateway: get_setting(conn, "epay_gateway")
+            .trim_end_matches('/')
+            .to_string(),
         pid: get_setting(conn, "epay_pid"),
         key: get_setting(conn, "epay_key"),
         site_url: {
