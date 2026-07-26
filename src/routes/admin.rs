@@ -781,6 +781,8 @@ struct SettingsTpl {
     epay_gateway: String,
     epay_pid: String,
     epay_key: String,
+    epay_alipay: bool,
+    epay_wxpay: bool,
     mail_enabled: bool,
     smtp_host: String,
     smtp_port: String,
@@ -813,6 +815,8 @@ async fn settings_page(
         epay_gateway: g("epay_gateway"),
         epay_pid: g("epay_pid"),
         epay_key: g("epay_key"),
+        epay_alipay: g("epay_alipay") == "1",
+        epay_wxpay: g("epay_wxpay") == "1",
         mail_enabled: g("mail_enabled") == "1",
         smtp_host: g("smtp_host"),
         smtp_port: g("smtp_port"),
@@ -841,6 +845,8 @@ pub struct SettingsForm {
     epay_gateway: String,
     epay_pid: String,
     epay_key: String,
+    epay_alipay: Option<String>,
+    epay_wxpay: Option<String>,
     mail_enabled: Option<String>,
     smtp_host: String,
     smtp_port: String,
@@ -862,6 +868,9 @@ async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsF
         }
     };
     let mail_on = if f.mail_enabled.is_some() { "1" } else { "0" };
+    // 未勾选的 checkbox 根本不会出现在表单里，所以 None 就是关
+    let alipay_on = if f.epay_alipay.is_some() { "1" } else { "0" };
+    let wxpay_on = if f.epay_wxpay.is_some() { "1" } else { "0" };
     let security = match f.smtp_security.as_str() {
         "starttls" => "starttls",
         "none" => "none",
@@ -877,7 +886,7 @@ async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsF
         port.to_string()
     };
     let db = state.db.lock().await;
-    let pairs: [(&str, &str); 19] = [
+    let pairs: [(&str, &str); 21] = [
         ("site_name", f.site_name.trim()),
         ("site_mark", f.site_mark.trim()),
         ("site_subtitle", f.site_subtitle.trim()),
@@ -889,6 +898,8 @@ async fn settings_save(State(state): State<SharedState>, Form(f): Form<SettingsF
         ("epay_gateway", f.epay_gateway.trim()),
         ("epay_pid", f.epay_pid.trim()),
         ("epay_key", f.epay_key.trim()),
+        ("epay_alipay", alipay_on),
+        ("epay_wxpay", wxpay_on),
         ("mail_enabled", mail_on),
         ("smtp_host", f.smtp_host.trim()),
         ("smtp_port", port_str.as_str()),

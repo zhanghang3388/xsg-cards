@@ -9,6 +9,22 @@ pub struct PayConfig {
     pub pid: String,
     pub key: String,
     pub site_url: String,
+    pub alipay: bool,
+    pub wxpay: bool,
+}
+
+/// 收银台上的一个支付按钮
+pub struct PayChannel {
+    /// 易支付的 type 参数，空串 = 不带 type，由对方收银台自选
+    pub code: String,
+    pub label: String,
+    /// 按钮配色用的 class：alipay | wxpay | other
+    pub style: String,
+    pub fields: Vec<(String, String)>,
+}
+
+fn flag(conn: &Connection, key: &str) -> bool {
+    get_setting(conn, key) == "1"
 }
 
 pub fn pay_config(conn: &Connection) -> PayConfig {
@@ -24,6 +40,8 @@ pub fn pay_config(conn: &Connection) -> PayConfig {
             let u = get_setting(conn, "site_url");
             u.trim_end_matches('/').to_string()
         },
+        alipay: flag(conn, "epay_alipay"),
+        wxpay: flag(conn, "epay_wxpay"),
     }
 }
 
@@ -33,6 +51,30 @@ impl PayConfig {
             && !self.gateway.is_empty()
             && !self.pid.is_empty()
             && !self.key.is_empty()
+    }
+
+    /// 按后台勾选生成收银台按钮。
+    /// 一个都没勾时不留白页，退回「其他方式」——提交不带 type 参数，
+    /// 由易支付自家收银台列出该商户实际开通的通道让买家选。
+    pub fn channels(&self, order: &Order) -> Vec<PayChannel> {
+        let mut out = Vec::new();
+        if self.alipay {
+            out.push(("alipay", "支付宝", "alipay"));
+        }
+        if self.wxpay {
+            out.push(("wxpay", "微信支付", "wxpay"));
+        }
+        if out.is_empty() {
+            out.push(("", "其他方式", "other"));
+        }
+        out.into_iter()
+            .map(|(code, label, style)| PayChannel {
+                fields: epay_form_fields(order, self, code),
+                code: code.to_string(),
+                label: label.to_string(),
+                style: style.to_string(),
+            })
+            .collect()
     }
 }
 

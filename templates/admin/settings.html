@@ -61,7 +61,20 @@
     <label class="field"><span class="field-name">商户密钥 KEY</span>
       <input name="epay_key" value="{{ epay_key }}" class="mono" type="password" autocomplete="off">
     </label>
-    <p class="hint">切换为易支付后，收银台将展示支付宝 / 微信按钮并跳转网关收款；回调地址为 <span class="mono">站点地址/api/pay/epay/notify</span>。</p>
+    <div class="field"><span class="field-name">收银台支付通道</span>
+      <div class="check-row">
+        <label class="check">
+          {% if epay_alipay %}<input type="checkbox" name="epay_alipay" value="1" checked>{% else %}<input type="checkbox" name="epay_alipay" value="1">{% endif %}
+          支付宝
+        </label>
+        <label class="check">
+          {% if epay_wxpay %}<input type="checkbox" name="epay_wxpay" value="1" checked>{% else %}<input type="checkbox" name="epay_wxpay" value="1">{% endif %}
+          微信支付
+        </label>
+      </div>
+    </div>
+    <p class="hint">勾几个，收银台就出几个按钮——只勾支付宝，买家就只能用支付宝付。<b>只勾你在易支付商户后台确实开通了的通道</b>，没开通的点了会在对方页面报错。两个都不勾也不会空着：收银台只出一个「其他方式」按钮，提交时不指定通道，由易支付自己的收银台列出你实际开通的方式让买家选——拿不准开了哪些时就这么设。</p>
+    <p class="hint">切换为易支付后跳转网关收款；回调地址为 <span class="mono">站点地址/api/pay/epay/notify</span>。</p>
   </section>
 
   <section class="panel col-span">

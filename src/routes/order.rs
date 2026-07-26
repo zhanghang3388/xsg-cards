@@ -51,8 +51,7 @@ struct PayTpl {
     pay_mode: String,
     epay_ready: bool,
     epay_gateway: String,
-    alipay_fields: Vec<(String, String)>,
-    wxpay_fields: Vec<(String, String)>,
+    channels: Vec<payment::PayChannel>,
 }
 
 fn remain_secs(order: &Order) -> i64 {
@@ -78,13 +77,10 @@ async fn pay_page(State(state): State<SharedState>, Path(order_no): Path<String>
         return Redirect::to(&link).into_response();
     }
     let cfg = payment::pay_config(&db);
-    let (alipay_fields, wxpay_fields) = if cfg.epay_ready() {
-        (
-            payment::epay_form_fields(&order, &cfg, "alipay"),
-            payment::epay_form_fields(&order, &cfg, "wxpay"),
-        )
+    let channels = if cfg.epay_ready() {
+        cfg.channels(&order)
     } else {
-        (Vec::new(), Vec::new())
+        Vec::new()
     };
     drop(db);
     let remain = remain_secs(&order);
@@ -94,8 +90,7 @@ async fn pay_page(State(state): State<SharedState>, Path(order_no): Path<String>
         pay_mode: cfg.mode.clone(),
         epay_ready: cfg.epay_ready(),
         epay_gateway: cfg.gateway.clone(),
-        alipay_fields,
-        wxpay_fields,
+        channels,
         order,
     })
 }

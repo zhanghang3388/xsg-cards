@@ -116,6 +116,9 @@ fn seed(conn: &Connection) -> Result<()> {
     set_default(conn, "epay_gateway", "")?;
     set_default(conn, "epay_pid", "")?;
     set_default(conn, "epay_key", "")?;
+    // 收银台展示哪些支付通道（都关则退回易支付自带收银台让买家自选）
+    set_default(conn, "epay_alipay", "1")?;
+    set_default(conn, "epay_wxpay", "1")?;
 
     // 邮件通知（默认关闭，参数由站长在后台填写）
     set_default(conn, "mail_enabled", "0")?;

@@ -534,11 +534,13 @@ textarea { resize: vertical; line-height: 1.6; }
   margin: 12px 0;
 }
 .note.warn { background: var(--gold-soft); color: var(--gold-text); border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); }
-.pay-ways { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; }
+/* 通道由后台勾选，可能只剩一个：auto-fit 让单个按钮自然占满整行 */
+.pay-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 6px; }
 .pay-way { width: 100%; padding: 12px; font-weight: 700; }
 .pay-dot { width: 9px; height: 9px; border-radius: 50%; }
 .pay-way.alipay .pay-dot { background: #1677ff; }
 .pay-way.wxpay .pay-dot { background: #07c160; }
+.pay-way.other .pay-dot { background: var(--gold); }
 .pay-tip { text-align: center; font-size: 12.5px; color: var(--ink-3); margin-top: 14px; }
 .pay-tip a { color: var(--gold-text); }
 
@@ -1027,6 +1029,9 @@ a.pg:hover { border-color: var(--gold); color: var(--ink); }
   cursor: pointer;
 }
 .check input { accent-color: var(--gold); }
+/* 并排的复选框（如收银台通道开关） */
+.check-row { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 8px 2px 2px; }
+.check-row .check { font-size: 13.5px; color: var(--ink); }
 
 @media (max-width: 640px) {
   .img-row { flex-direction: column; }

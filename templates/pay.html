@@ -28,14 +28,12 @@
       {% else %}
         {% if epay_ready %}
         <div class="pay-ways">
+          {% for ch in channels %}
           <form method="post" action="{{ epay_gateway }}/submit.php">
-            {% for f in alipay_fields %}<input type="hidden" name="{{ f.0 }}" value="{{ f.1 }}">{% endfor %}
-            <button class="btn pay-way alipay" type="submit"><span class="pay-dot" aria-hidden="true"></span>支付宝</button>
+            {% for f in ch.fields %}<input type="hidden" name="{{ f.0 }}" value="{{ f.1 }}">{% endfor %}
+            <button class="btn pay-way {{ ch.style }}" type="submit" data-type="{{ ch.code }}"><span class="pay-dot" aria-hidden="true"></span>{{ ch.label }}</button>
           </form>
-          <form method="post" action="{{ epay_gateway }}/submit.php">
-            {% for f in wxpay_fields %}<input type="hidden" name="{{ f.0 }}" value="{{ f.1 }}">{% endfor %}
-            <button class="btn pay-way wxpay" type="submit"><span class="pay-dot" aria-hidden="true"></span>微信支付</button>
-          </form>
+          {% endfor %}
         </div>
         <p class="hint">跳转到收银台完成支付后，本页会自动进入取卡页。</p>
         {% else %}
